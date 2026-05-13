@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import {
   PackageCheck, Activity, LineChart, UserCog, Users,
   ReceiptText, FileText, Boxes, AlertTriangle, ArrowUpRight, TrendingUp,
+  CalendarClock,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -22,12 +23,13 @@ export const Route = createFileRoute("/")({
 const modules = [
   {
     title: "Packing Production",
-    desc: "Output, line status, weekly chart",
+    desc: "Dispatch, line status, reports & deadlines",
     accent: "bg-hero",
     items: [
-      { to: "/production/weight",        label: "Output Tracking", icon: PackageCheck },
-      { to: "/production/status",        label: "Order Status",    icon: Activity     },
-      { to: "/production/weekly-report", label: "Weekly Report",   icon: LineChart    },
+      { to: "/production/weight",        label: "Dispatch Tracking",  icon: PackageCheck  },
+      { to: "/production/status",        label: "Order Status",       icon: Activity      },
+      { to: "/production/weekly-report", label: "Reports",            icon: LineChart     },
+      { to: "/production/deadline",      label: "Deadline Tracking",  icon: CalendarClock },
     ],
   },
   {

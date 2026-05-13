@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProductionWeightRouteImport } from './routes/production.weight'
 import { Route as ProductionWeeklyReportRouteImport } from './routes/production.weekly-report'
 import { Route as ProductionStatusRouteImport } from './routes/production.status'
+import { Route as ProductionDeadlineRouteImport } from './routes/production.deadline'
 import { Route as InventoryStockRouteImport } from './routes/inventory.stock'
 import { Route as InventoryAlertsRouteImport } from './routes/inventory.alerts'
 import { Route as ContractorSalaryRouteImport } from './routes/contractor.salary'
@@ -52,6 +53,11 @@ const ProductionWeeklyReportRoute = ProductionWeeklyReportRouteImport.update({
 const ProductionStatusRoute = ProductionStatusRouteImport.update({
   id: '/production/status',
   path: '/production/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionDeadlineRoute = ProductionDeadlineRouteImport.update({
+  id: '/production/deadline',
+  path: '/production/deadline',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InventoryStockRoute = InventoryStockRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/contractor/salary': typeof ContractorSalaryRoute
   '/inventory/alerts': typeof InventoryAlertsRoute
   '/inventory/stock': typeof InventoryStockRoute
+  '/production/deadline': typeof ProductionDeadlineRoute
   '/production/status': typeof ProductionStatusRoute
   '/production/weekly-report': typeof ProductionWeeklyReportRoute
   '/production/weight': typeof ProductionWeightRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/contractor/salary': typeof ContractorSalaryRoute
   '/inventory/alerts': typeof InventoryAlertsRoute
   '/inventory/stock': typeof InventoryStockRoute
+  '/production/deadline': typeof ProductionDeadlineRoute
   '/production/status': typeof ProductionStatusRoute
   '/production/weekly-report': typeof ProductionWeeklyReportRoute
   '/production/weight': typeof ProductionWeightRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/contractor/salary': typeof ContractorSalaryRoute
   '/inventory/alerts': typeof InventoryAlertsRoute
   '/inventory/stock': typeof InventoryStockRoute
+  '/production/deadline': typeof ProductionDeadlineRoute
   '/production/status': typeof ProductionStatusRoute
   '/production/weekly-report': typeof ProductionWeeklyReportRoute
   '/production/weight': typeof ProductionWeightRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/contractor/salary'
     | '/inventory/alerts'
     | '/inventory/stock'
+    | '/production/deadline'
     | '/production/status'
     | '/production/weekly-report'
     | '/production/weight'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/contractor/salary'
     | '/inventory/alerts'
     | '/inventory/stock'
+    | '/production/deadline'
     | '/production/status'
     | '/production/weekly-report'
     | '/production/weight'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/contractor/salary'
     | '/inventory/alerts'
     | '/inventory/stock'
+    | '/production/deadline'
     | '/production/status'
     | '/production/weekly-report'
     | '/production/weight'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   ContractorSalaryRoute: typeof ContractorSalaryRoute
   InventoryAlertsRoute: typeof InventoryAlertsRoute
   InventoryStockRoute: typeof InventoryStockRoute
+  ProductionDeadlineRoute: typeof ProductionDeadlineRoute
   ProductionStatusRoute: typeof ProductionStatusRoute
   ProductionWeeklyReportRoute: typeof ProductionWeeklyReportRoute
   ProductionWeightRoute: typeof ProductionWeightRoute
@@ -254,6 +267,13 @@ declare module '@tanstack/react-router' {
       path: '/production/status'
       fullPath: '/production/status'
       preLoaderRoute: typeof ProductionStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production/deadline': {
+      id: '/production/deadline'
+      path: '/production/deadline'
+      fullPath: '/production/deadline'
+      preLoaderRoute: typeof ProductionDeadlineRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory/stock': {
@@ -326,6 +346,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContractorSalaryRoute: ContractorSalaryRoute,
   InventoryAlertsRoute: InventoryAlertsRoute,
   InventoryStockRoute: InventoryStockRoute,
+  ProductionDeadlineRoute: ProductionDeadlineRoute,
   ProductionStatusRoute: ProductionStatusRoute,
   ProductionWeeklyReportRoute: ProductionWeeklyReportRoute,
   ProductionWeightRoute: ProductionWeightRoute,

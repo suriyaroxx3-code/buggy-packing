@@ -147,9 +147,19 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
-  /* ── Solid teal cursor in every input / textarea / select ── */
+  /* ── Always-visible text cursor + caret in every input / textarea / select ── */
   input, textarea, select {
-    caret-color: #0d7377;
+    caret-color: #0d7377 !important;
+    cursor: text !important;
+  }
+  /* Ensure caret is never invisible (some Tailwind resets can hide it) */
+  input:focus, textarea:focus {
+    caret-color: #0d7377 !important;
+    cursor: text !important;
+  }
+  /* Preserve pointer cursor on buttons even while typing nearby */
+  button, [role="button"] {
+    cursor: pointer;
   }
   h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
 }

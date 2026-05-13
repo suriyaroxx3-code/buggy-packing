@@ -1,4 +1,4 @@
-// production.weight.jsx — Output Tracking, fully static localStorage-backed
+// production.weight.jsx — Dispatch Tracking, fully static localStorage-backed
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -7,7 +7,7 @@ import { batchStore } from "@/lib/store";
 import { Plus, PackageCheck, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/production/weight")({
-  head: () => ({ meta: [{ title: "Output Tracking — BrushPack" }] }),
+  head: () => ({ meta: [{ title: "Dispatch Tracking — BrushPack" }] }),
   component: Page,
 });
 
@@ -59,8 +59,8 @@ function Page() {
 
   return (
     <DashboardLayout
-      title="Output Tracking"
-      subtitle="Track received tips, packed units and remaining stock per batch."
+      title="Dispatch Tracking"
+      subtitle="Track received tips, packed units and dispatched batches per order."
     >
       {/* Toast */}
       {toast && (

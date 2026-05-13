@@ -11,9 +11,17 @@ const K = {
   stock:       "bp_stock",
   batches:     "bp_batches",
   billing:     "bp_billing",
+  deadlines:   "bp_deadlines",
+  users:       "bp_users",
 };
 
 // ── Seed data (used only on first load, never duplicated) ───────
+const TODAY = new Date().toISOString().slice(0, 10);
+const addDays = (n) => {
+  const d = new Date(); d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
 const SEEDS = {
   contractors: [
     { id: "c1", name: "Suresh Pillai", area: "Cardboard Packing",  workers: 22, amount: 68000, status: "Paid"    },
@@ -46,6 +54,13 @@ const SEEDS = {
     { id: "b4", batch: "PK-2378", product: "Detail Tip 6mm — Cardboard Box", input: 1600, output: 1590 },
   ],
   billing: [],
+  deadlines: [
+    { id: "d1", orderId: "PK-2381", product: "Round Tip 12mm — Cardboard",     client: "BrightBrush Co.",  deadline: addDays(2),   priority: "High",   status: "On Track",  assignedTo: "Suresh Pillai",  notes: "Client requested priority packing." },
+    { id: "d2", orderId: "PK-2380", product: "Flat Tip 18mm — Plastic Sleeve", client: "ArtPro Supplies",  deadline: addDays(1),   priority: "Medium", status: "At Risk",   assignedTo: "Rekha Menon",    notes: "Sleeve stock running low." },
+    { id: "d3", orderId: "PK-2379", product: "Angled Tip 10mm — Blister Pack", client: "Studio Mart",      deadline: addDays(-2),  priority: "High",   status: "Overdue",   assignedTo: "Arjun Nair",     notes: "Delayed due to QC failure." },
+    { id: "d4", orderId: "PK-2378", product: "Detail Tip 6mm — Cardboard Box", client: "ColorWorks",       deadline: addDays(8),   priority: "Low",    status: "On Track",  assignedTo: "Divya Thomas",   notes: "" },
+    { id: "d5", orderId: "PK-2377", product: "Fan Tip 25mm — Blister Card",    client: "Maven Brushes",    deadline: addDays(-1),  priority: "Medium", status: "Completed", assignedTo: "Biju Varghese",  notes: "Dispatched successfully." },
+  ],
 };
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -180,10 +195,41 @@ export const stockStore = {
   },
 };
 
-// ── Batches (production output) ────────────────────────────────
+// -- Deadlines ---------------------------------------------------------------
+export const deadlineStore = {
+  getAll() { return getAll('deadlines'); },
+  save(list) { setAll('deadlines', list); },
+  add(data) {
+    const list  = this.getAll();
+    const entry = { ...data, id: uid() };
+    const updated = [entry, ...list];
+    this.save(updated);
+    return entry;
+  },
+  update(id, patch) {
+    const list = this.getAll().map((d) =>
+      d.id === id ? { ...d, ...patch } : d
+    );
+    this.save(list);
+    return list;
+  },
+  remove(id) {
+    const list = this.getAll().filter((d) => d.id !== id);
+    this.save(list);
+    return list;
+  },
+  getOverdue() {
+    return this.getAll().filter((d) => d.status === 'Overdue');
+  },
+  getAtRisk() {
+    return this.getAll().filter((d) => d.status === 'At Risk');
+  },
+};
+
+// -- Batches (production output) ----------------------------------------------
 export const batchStore = {
-  getAll() { return getAll("batches"); },
-  save(list) { setAll("batches", list); },
+  getAll() { return getAll('batches'); },
+  save(list) { setAll('batches', list); },
   add(data) {
     const list = this.getAll();
     const entry = { ...data, id: uid() };
@@ -198,16 +244,14 @@ export const batchStore = {
   },
 };
 
-// ── Billing ────────────────────────────────────────────────────
+// -- Billing ------------------------------------------------------------------
 export const billingStore = {
-  getAll() { return getAll("billing"); },
-  save(list) { setAll("billing", list); },
+  getAll() { return getAll('billing'); },
+  save(list) { setAll('billing', list); },
   add(data) {
     const list = this.getAll();
-    // Prevent duplicate IDs
     const existing = list.find((r) => r.id === data.id);
     if (existing) {
-      // Update in place instead of duplicating
       const updated = list.map((r) => r.id === data.id ? { ...r, ...data } : r);
       this.save(updated);
       return updated;
@@ -228,4 +272,66 @@ export const billingStore = {
     this.save(list);
     return list;
   },
+};
+
+// ── Users / Auth ───────────────────────────────────────────────
+const USER_SEEDS = [
+  { id: "u1", username: "manager", password: "brushpack2024", role: "Operations Manager" },
+];
+
+export const userStore = {
+  getAll() {
+    const stored = read(K.users);
+    if (stored !== null) return stored;
+    write(K.users, USER_SEEDS);
+    return USER_SEEDS;
+  },
+  save(list) { write(K.users, list); },
+
+  /** Returns user object on success, null on failure */
+  authenticate(username, password) {
+    const list = this.getAll();
+    return list.find(
+      (u) => u.username.trim().toLowerCase() === username.trim().toLowerCase()
+           && u.password === password
+    ) || null;
+  },
+
+  /** Create a new user. Throws "username_taken" if duplicate. */
+  add(username, password, role = "Staff") {
+    const list = this.getAll();
+    if (list.some((u) => u.username.trim().toLowerCase() === username.trim().toLowerCase())) {
+      throw new Error("username_taken");
+    }
+    const entry = { id: uid(), username: username.trim(), password, role };
+    this.save([...list, entry]);
+    return entry;
+  },
+
+  /** Change password. Throws "wrong_password" if currentPwd doesn't match. */
+  changePassword(username, currentPwd, newPwd) {
+    const list = this.getAll();
+    const user = list.find(
+      (u) => u.username.trim().toLowerCase() === username.trim().toLowerCase()
+           && u.password === currentPwd
+    );
+    if (!user) throw new Error("wrong_password");
+    const updated = list.map((u) =>
+      u.id === user.id ? { ...u, password: newPwd } : u
+    );
+    this.save(updated);
+    return updated;
+  },
+};
+
+// ── Session helpers ─────────────────────────────────────────────
+const SESSION_KEY = "bp_session";
+export const sessionStore = {
+  get() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+  },
+  set(user) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username, role: user.role }));
+  },
+  clear() { localStorage.removeItem(SESSION_KEY); },
 };

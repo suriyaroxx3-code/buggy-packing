@@ -13,6 +13,7 @@ from models import (
     StockItem, StockItemCreate,
     Batch, BatchCreate,
     BillingRecord, BillingRecordCreate,
+    Deadline, DeadlineCreate,
     DashboardSummary,
 )
 import data as db
@@ -44,7 +45,9 @@ def get_dashboard():
     packed  = sum(b["output"] for b in db.batches)
     pending = [r for r in db.billing_records if r["status"] in ("Sent", "Pending", "Draft")]
     pending_value = sum(r["value"] for r in pending)
-    low_stock = [s for s in db.stock_items if s["qty"] < s["min"]]
+    low_stock  = [s for s in db.stock_items if s["qty"] < s["min"]]
+    overdue    = [d for d in db.deadlines if d["status"] == "Overdue"]
+    at_risk    = [d for d in db.deadlines if d["status"] == "At Risk"]
     return DashboardSummary(
         units_packed_today=packed,
         workers_present=present,
@@ -52,6 +55,8 @@ def get_dashboard():
         pending_bills=len(pending),
         pending_bills_value=pending_value,
         low_stock_count=len(low_stock),
+        overdue_deadlines=len(overdue),
+        at_risk_deadlines=len(at_risk),
     )
 
 
@@ -283,9 +288,142 @@ def delete_billing(record_id: str):
     raise HTTPException(status_code=404, detail="Billing record not found")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===========================================================================
+# DEADLINE TRACKING
+# ===========================================================================
+@app.get("/api/deadlines", response_model=List[Deadline], tags=["Deadlines"])
+def list_deadlines():
+    return db.deadlines
+
+
+@app.get("/api/deadlines/overdue", response_model=List[Deadline], tags=["Deadlines"])
+def list_overdue():
+    return [d for d in db.deadlines if d["status"] in ("Overdue", "At Risk")]
+
+
+@app.get("/api/deadlines/{deadline_id}", response_model=Deadline, tags=["Deadlines"])
+def get_deadline(deadline_id: str):
+    for d in db.deadlines:
+        if d["id"] == deadline_id:
+            return d
+    raise HTTPException(status_code=404, detail="Deadline not found")
+
+
+@app.post("/api/deadlines", response_model=Deadline, status_code=status.HTTP_201_CREATED, tags=["Deadlines"])
+def create_deadline(body: DeadlineCreate):
+    new = {"id": db.next_id("deadline"), **body.model_dump()}
+    db.deadlines.append(new)
+    return new
+
+
+@app.put("/api/deadlines/{deadline_id}", response_model=Deadline, tags=["Deadlines"])
+def update_deadline(deadline_id: str, body: DeadlineCreate):
+    for i, d in enumerate(db.deadlines):
+        if d["id"] == deadline_id:
+            db.deadlines[i] = {"id": deadline_id, **body.model_dump()}
+            return db.deadlines[i]
+    raise HTTPException(status_code=404, detail="Deadline not found")
+
+
+@app.patch("/api/deadlines/{deadline_id}/status", response_model=Deadline, tags=["Deadlines"])
+def update_deadline_status(deadline_id: str, new_status: str):
+    valid = {"On Track", "At Risk", "Overdue", "Completed"}
+    if new_status not in valid:
+        raise HTTPException(status_code=400, detail=f"status must be one of {valid}")
+    for i, d in enumerate(db.deadlines):
+        if d["id"] == deadline_id:
+            db.deadlines[i]["status"] = new_status
+            return db.deadlines[i]
+    raise HTTPException(status_code=404, detail="Deadline not found")
+
+
+@app.delete("/api/deadlines/{deadline_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Deadlines"])
+def delete_deadline(deadline_id: str):
+    for i, d in enumerate(db.deadlines):
+        if d["id"] == deadline_id:
+            db.deadlines.pop(i)
+            return
+    raise HTTPException(status_code=404, detail="Deadline not found")
+
+
+
+# ===========================================================================
+# AUTH / USERS
+# ===========================================================================
+from models import (
+    UserCreate, UserOut, LoginRequest, LoginResponse, ChangePasswordRequest,
+)
+
+@app.post("/api/auth/login", response_model=LoginResponse, tags=["Auth"])
+def login(req: LoginRequest):
+    """Validate credentials and return the user on success."""
+    user = next(
+        (u for u in db.users
+         if u["username"].lower() == req.username.strip().lower()
+         and u["password"] == req.password),
+        None,
+    )
+    if not user:
+        return LoginResponse(ok=False, message="Incorrect username or password.")
+    return LoginResponse(
+        ok=True,
+        user=UserOut(id=user["id"], username=user["username"], role=user["role"]),
+    )
+
+
+@app.post("/api/auth/register", response_model=LoginResponse, tags=["Auth"])
+def register(req: UserCreate):
+    """Create a new user. Fails if username already taken."""
+    exists = any(
+        u["username"].lower() == req.username.strip().lower()
+        for u in db.users
+    )
+    if exists:
+        return LoginResponse(ok=False, message="Username already taken.")
+    if len(req.password) < 6:
+        return LoginResponse(ok=False, message="Password must be at least 6 characters.")
+    new_id = "u" + str(db._id_counters["user"])
+    db._id_counters["user"] += 1
+    entry = {
+        "id": new_id,
+        "username": req.username.strip(),
+        "password": req.password,
+        "role": req.role,
+    }
+    db.users.append(entry)
+    return LoginResponse(
+        ok=True,
+        user=UserOut(id=entry["id"], username=entry["username"], role=entry["role"]),
+        message="User created successfully.",
+    )
+
+
+@app.post("/api/auth/change-password", response_model=LoginResponse, tags=["Auth"])
+def change_password(req: ChangePasswordRequest):
+    """Change a user password after verifying the current password."""
+    user = next(
+        (u for u in db.users
+         if u["username"].lower() == req.username.strip().lower()
+         and u["password"] == req.current_password),
+        None,
+    )
+    if not user:
+        return LoginResponse(ok=False, message="Current password is incorrect.")
+    if len(req.new_password) < 6:
+        return LoginResponse(ok=False, message="New password must be at least 6 characters.")
+    user["password"] = req.new_password
+    return LoginResponse(ok=True, message="Password changed successfully.")
+
+
+@app.get("/api/users", response_model=list[UserOut], tags=["Auth"])
+def list_users():
+    """Return all users (passwords excluded)."""
+    return [UserOut(id=u["id"], username=u["username"], role=u["role"]) for u in db.users]
+
+
+# ===========================================================================
 # HEALTH CHECK
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok", "service": "BrushPack API"}

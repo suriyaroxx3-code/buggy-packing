@@ -89,7 +89,27 @@ class BillingRecord(BillingRecordBase):
     pass
 
 
-# ── Dashboard summary ─────────────────────────────────────────────────────────
+# -- Deadline -------------------------------------------------------------------
+class DeadlineBase(BaseModel):
+    order_id: str
+    product: str
+    client: str
+    deadline: str
+    priority: str = "Medium"
+    status: str   = "On Track"
+    assigned_to: Optional[str] = ""
+    notes: Optional[str] = ""
+
+
+class DeadlineCreate(DeadlineBase):
+    pass
+
+
+class Deadline(DeadlineBase):
+    id: str
+
+
+# -- Dashboard summary -----------------------------------------------------------
 class DashboardSummary(BaseModel):
     units_packed_today: int
     workers_present: int
@@ -97,3 +117,35 @@ class DashboardSummary(BaseModel):
     pending_bills: int
     pending_bills_value: float
     low_stock_count: int
+    overdue_deadlines: int = 0
+    at_risk_deadlines: int = 0
+
+# -- User / Auth ---------------------------------------------------------------
+class UserBase(BaseModel):
+    username: str
+    role: str = "Staff"
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class UserOut(UserBase):
+    id: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    ok: bool
+    user: Optional[UserOut] = None
+    message: str = ""
+
+
+class ChangePasswordRequest(BaseModel):
+    username: str
+    current_password: str
+    new_password: str

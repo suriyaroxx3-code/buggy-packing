@@ -5,17 +5,20 @@ import {
   LayoutDashboard, PackageCheck, Activity, LineChart,
   Users, UserCog, FileText, ReceiptText, Boxes,
   AlertTriangle, LogOut, Menu, X, Search, Bell,
-  ChevronDown, Package, AlertCircle,
+  ChevronDown, Package, AlertCircle, CalendarClock,
+  User, Settings, KeyRound, ChevronRight, Check, ShieldCheck,
 } from "lucide-react";
+import { userStore, sessionStore } from "@/lib/store";
 
 const groups = [
   { title: "Overview", items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard }] },
   {
     title: "Packing Production",
     items: [
-      { to: "/production/weight",        label: "Output Tracking", icon: PackageCheck },
-      { to: "/production/status",        label: "Order Status",    icon: Activity     },
-      { to: "/production/weekly-report", label: "Weekly Report",   icon: LineChart    },
+      { to: "/production/weight",        label: "Dispatch Tracking",  icon: PackageCheck   },
+      { to: "/production/status",        label: "Order Status",       icon: Activity       },
+      { to: "/production/weekly-report", label: "Reports",            icon: LineChart      },
+      { to: "/production/deadline",      label: "Deadline Tracking",  icon: CalendarClock  },
     ],
   },
   {
@@ -55,12 +58,36 @@ const C = {
   accent:         "#d97706",   // amber
 };
 
+/* ── Profile stored in localStorage ── */
+const PROFILE_KEY = "bp_profile";
+function loadProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { name: "Manager", role: "Operations Manager", email: "manager@brushpack.com" };
+}
+function saveProfile(p) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+}
+
 export function DashboardLayout({ children, title, subtitle, lowStockItems = [] }) {
   const location  = useLocation();
   const navigate  = useNavigate();
   const [open, setOpen]                   = useState(false);
   const [notificationOpen, setNotiOpen]   = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [profileOpen, setProfileOpen]     = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [pwMode, setPwMode]               = useState(false);
+  const [pwForm, setPwForm]               = useState({ current: "", next: "", confirm: "" });
+  const [pwError, setPwError]             = useState("");
+  const [pwOk, setPwOk]                   = useState("");
+  const [profile, setProfile]             = useState(loadProfile);
+  const [draftProfile, setDraftProfile]   = useState(loadProfile);
+
+  /* derive logged-in username from session (fallback to "manager") */
+  const sessionUser = sessionStore.get()?.username || "manager";
   const [openGroups, setOpenGroups]       = useState(() => {
     const init = {};
     groups.forEach((g) => { init[g.title] = g.items.some((i) => i.to === location.pathname); });
@@ -376,12 +403,240 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
               )}
             </div>
 
-            {/* Avatar */}
-            <div
-              className="h-8 w-8 rounded-full grid place-items-center font-semibold text-sm shrink-0 text-white"
-              style={{ backgroundColor: C.activeItem }}
-            >
-              M
+            {/* ── Profile avatar + dropdown ── */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => { setProfileOpen((s) => !s); setEditingProfile(false); setPwMode(false); setPwError(""); setPwOk(""); }}
+                className="flex items-center gap-2 rounded-xl px-2 py-1 transition"
+                style={{ color: "#4a5568" }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#e8edf3"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                aria-label="Profile menu"
+              >
+                <div
+                  className="h-8 w-8 rounded-full grid place-items-center font-semibold text-sm text-white shrink-0"
+                  style={{ backgroundColor: C.activeItem }}
+                >
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:block text-left min-w-0">
+                  <div className="text-xs font-semibold leading-tight truncate max-w-[100px]" style={{ color: "#1a202c" }}>
+                    {profile.name}
+                  </div>
+                  <div className="text-[10px] leading-tight truncate max-w-[100px]" style={{ color: "#718096" }}>
+                    {profile.role}
+                  </div>
+                </div>
+                <ChevronDown
+                  className="h-3 w-3 hidden sm:block shrink-0 transition-transform"
+                  style={{ transform: profileOpen ? "rotate(180deg)" : "rotate(0deg)", color: "#a0aec0" }}
+                />
+              </button>
+
+              {profileOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => { setProfileOpen(false); setEditingProfile(false); setPwMode(false); setPwError(""); setPwOk(""); }} />
+                  <div
+                    className="absolute right-0 top-full mt-2 w-72 rounded-2xl z-50 animate-fade-in overflow-hidden"
+                    style={{
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 20px 56px rgba(0,0,0,0.16)",
+                    }}
+                  >
+                    {/* Profile header */}
+                    <div
+                      className="p-4 flex items-center gap-3"
+                      style={{ borderBottom: "1px solid #e2e8f0", background: "linear-gradient(135deg, #0d7377 0%, #14b8a6 100%)" }}
+                    >
+                      <div
+                        className="h-12 w-12 rounded-full grid place-items-center font-bold text-lg text-white shrink-0"
+                        style={{ backgroundColor: "rgba(255,255,255,0.25)", border: "2px solid rgba(255,255,255,0.5)" }}
+                      >
+                        {profile.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-white truncate">{profile.name}</div>
+                        <div className="text-xs text-white/80 truncate">{profile.role}</div>
+                        <div className="text-xs text-white/60 truncate mt-0.5">{profile.email}</div>
+                      </div>
+                    </div>
+
+                    {pwMode ? (
+                      /* ── Change Password panel ── */
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <ShieldCheck className="h-4 w-4" style={{ color: "#0d7377" }} />
+                          <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#718096" }}>Change Password</div>
+                        </div>
+
+                        {pwError && (
+                          <div className="rounded-lg px-3 py-2 text-xs font-medium" style={{ backgroundColor: "#FFF5F5", color: "#C53030", border: "1px solid #FED7D7" }}>
+                            {pwError}
+                          </div>
+                        )}
+                        {pwOk && (
+                          <div className="rounded-lg px-3 py-2 text-xs font-medium" style={{ backgroundColor: "#F0FFF4", color: "#276749", border: "1px solid #9AE6B4" }}>
+                            {pwOk}
+                          </div>
+                        )}
+
+                        {[
+                          { key: "current",  label: "Current Password",  placeholder: "Enter current password" },
+                          { key: "next",     label: "New Password",       placeholder: "Min. 6 characters"     },
+                          { key: "confirm",  label: "Confirm New Password", placeholder: "Re-enter new password" },
+                        ].map(({ key, label, placeholder }) => (
+                          <div key={key}>
+                            <label className="block text-xs font-medium mb-1" style={{ color: "#4a5568" }}>{label}</label>
+                            <input
+                              type="password"
+                              className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition"
+                              style={{ borderColor: "#cbd5e0", backgroundColor: "#f7fafc", color: "#1a202c", caretColor: "#0d7377", cursor: "text" }}
+                              onFocus={(e) => (e.target.style.borderColor = "#0d7377")}
+                              onBlur={(e)  => (e.target.style.borderColor = "#cbd5e0")}
+                              placeholder={placeholder}
+                              value={pwForm[key]}
+                              onChange={(e) => setPwForm((p) => ({ ...p, [key]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
+
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => { setPwMode(false); setPwForm({ current: "", next: "", confirm: "" }); setPwError(""); setPwOk(""); }}
+                            className="flex-1 rounded-lg py-2 text-xs font-medium"
+                            style={{ backgroundColor: "#e8edf3", color: "#4a5568", border: "none", cursor: "pointer" }}
+                          >Cancel</button>
+                          <button
+                            onClick={() => {
+                              setPwError(""); setPwOk("");
+                              if (!pwForm.current) { setPwError("Enter current password."); return; }
+                              if (!pwForm.next)    { setPwError("Enter a new password."); return; }
+                              if (pwForm.next.length < 6) { setPwError("New password must be 6+ characters."); return; }
+                              if (pwForm.next !== pwForm.confirm) { setPwError("New passwords do not match."); return; }
+                              try {
+                                userStore.changePassword(sessionUser, pwForm.current, pwForm.next);
+                                setPwOk("Password changed successfully!");
+                                setPwForm({ current: "", next: "", confirm: "" });
+                                setTimeout(() => { setPwMode(false); setPwOk(""); }, 1800);
+                              } catch {
+                                setPwError("Current password is incorrect.");
+                              }
+                            }}
+                            className="flex-1 rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
+                            style={{ backgroundColor: "#0d7377", color: "#ffffff", border: "none", cursor: "pointer" }}
+                          ><Check className="h-3.5 w-3.5" /> Save</button>
+                        </div>
+                      </div>
+                    ) : editingProfile ? (
+                      <div className="p-4 space-y-3">
+                        <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#718096" }}>Edit Profile</div>
+                        {[
+                          { key: "name",  label: "Full Name",  placeholder: "Manager" },
+                          { key: "role",  label: "Job Title",  placeholder: "Operations Manager" },
+                          { key: "email", label: "Email",      placeholder: "manager@brushpack.com" },
+                        ].map(({ key, label, placeholder }) => (
+                          <div key={key}>
+                            <label className="block text-xs font-medium mb-1" style={{ color: "#4a5568" }}>{label}</label>
+                            <input
+                              className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition"
+                              style={{
+                                borderColor: "#cbd5e0", backgroundColor: "#f7fafc",
+                                color: "#1a202c", caretColor: "#0d7377", cursor: "text",
+                              }}
+                              onFocus={(e) => (e.target.style.borderColor = "#0d7377")}
+                              onBlur={(e)  => (e.target.style.borderColor = "#cbd5e0")}
+                              placeholder={placeholder}
+                              value={draftProfile[key]}
+                              onChange={(e) => setDraftProfile((p) => ({ ...p, [key]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => { setEditingProfile(false); setDraftProfile(profile); }}
+                            className="flex-1 rounded-lg py-2 text-xs font-medium transition"
+                            style={{ backgroundColor: "#e8edf3", color: "#4a5568", border: "none", cursor: "pointer" }}
+                          >Cancel</button>
+                          <button
+                            onClick={() => {
+                              const updated = {
+                                name:  draftProfile.name.trim()  || "Manager",                                role:  draftProfile.role.trim()  || "Operations Manager",
+                                email: draftProfile.email.trim() || "manager@brushpack.com",
+                              };
+                              setProfile(updated); setDraftProfile(updated);
+                              saveProfile(updated); setEditingProfile(false);
+                            }}
+                            className="flex-1 rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                            style={{ backgroundColor: "#0d7377", color: "#ffffff", border: "none", cursor: "pointer" }}
+                          ><Check className="h-3.5 w-3.5" /> Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-2">
+                        {[{
+                          icon: <User className="h-4 w-4" style={{ color: "#0d7377" }} />,
+                          iconBg: "#e8f5e9",
+                          label: "Edit Profile",
+                          sub: "Update name, role & email",
+                          onClick: () => { setEditingProfile(true); setDraftProfile(profile); },
+                        }, {
+                          icon: <KeyRound className="h-4 w-4" style={{ color: "#d97706" }} />,
+                          iconBg: "#fffbeb",
+                          label: "Change Password",
+                          sub: "Update your credentials",
+                          onClick: () => { setPwMode(true); setEditingProfile(false); setPwError(""); setPwOk(""); setPwForm({ current: "", next: "", confirm: "" }); },
+                        }].map((item) => (
+                          <button key={item.label}
+                            onClick={item.onClick}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left"
+                            style={{ backgroundColor: "transparent", border: "none", cursor: "pointer" }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f7fafc"}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                          >
+                            <div className="h-8 w-8 rounded-lg grid place-items-center shrink-0" style={{ backgroundColor: item.iconBg }}>{item.icon}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm" style={{ color: "#2d3748" }}>{item.label}</div>
+                              <div className="text-xs" style={{ color: "#718096" }}>{item.sub}</div>
+                            </div>
+                            <ChevronRight className="h-4 w-4 shrink-0" style={{ color: "#a0aec0" }} />
+                          </button>
+                        ))}
+
+                        <div style={{ borderTop: "1px solid #f0f4f8", margin: "6px 16px" }} />
+
+                        <div className="px-4 py-1">
+                          <div className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#a0aec0" }}>Account</div>
+                          {[{ label: "Name", value: profile.name }, { label: "Role", value: profile.role }, { label: "Email", value: profile.email }].map(({ label, value }) => (
+                            <div key={label} className="flex justify-between text-xs py-0.5">
+                              <span style={{ color: "#718096" }}>{label}</span>
+                              <span className="font-medium truncate max-w-[150px]" style={{ color: "#2d3748" }}>{value}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ borderTop: "1px solid #f0f4f8", margin: "6px 0" }} />
+
+                        <button
+                          onClick={() => { setProfileOpen(false); sessionStore.clear(); navigate({ to: "/login" }); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left"
+                          style={{ backgroundColor: "transparent", border: "none", cursor: "pointer" }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#fff5f5"}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                        >
+                          <div className="h-8 w-8 rounded-lg grid place-items-center shrink-0" style={{ backgroundColor: "#fff5f5" }}>
+                            <LogOut className="h-4 w-4" style={{ color: "#e53e3e" }} />
+                          </div>
+                          <div>
+                            <div className="font-medium text-sm" style={{ color: "#e53e3e" }}>Sign Out</div>
+                            <div className="text-xs" style={{ color: "#a0aec0" }}>Return to login screen</div>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
