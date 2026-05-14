@@ -54,15 +54,9 @@ export const Route = createRootRoute({
 
 function RootShell({ children }) {
   return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
+    <>
+      {children}
+    </>
   );
 }
 

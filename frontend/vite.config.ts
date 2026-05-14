@@ -75,6 +75,9 @@ export default defineConfig({
         // Ignore the generated file so its writes don't cause extra HMR cycles.
         ignored: ["**/routeTree.gen.ts"],
       },
+      hmr: {
+        overlay: false,
+      },
     },
   },
 });

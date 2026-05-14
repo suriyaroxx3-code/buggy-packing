@@ -82,4 +82,15 @@ function Page() {
                   </div>
                   <div className="mt-2 flex justify-between text-[10px] sm:text-[11px] text-muted-foreground overflow-hidden">
                     {STAGES.map((s) => (
-                      <span 
+                      <span key={s} className="truncate">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}

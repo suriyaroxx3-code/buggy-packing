@@ -19,6 +19,7 @@ const EMPTY = { id: "", contractor: "", date: new Date().toISOString().split("T"
 function Page() {
   const [records, setRecords]   = useState(() => billingStore.getAll());
   const [activeTab, setActiveTab] = useState("all");
+  const [viewMode, setViewMode]   = useState("quotation");
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [newEntry, setNewEntry] = useState(EMPTY);
@@ -38,12 +39,18 @@ function Page() {
       return;
     }
 
-    const record = { ...newEntry, id: newEntry.id.trim(), contractor: newEntry.contractor.trim(), value: Number(newEntry.value) || 0, type: "quote" };
+    const record = {
+      ...newEntry,
+      id: newEntry.id.trim(),
+      contractor: newEntry.contractor.trim(),
+      value: Number(newEntry.value) || 0,
+      type: viewMode === "billing" ? "bill" : "quote",
+    };
     const updated = billingStore.add(record);
     setRecords(Array.isArray(updated) ? updated : billingStore.getAll());
     setIsAdding(false);
     setNewEntry(EMPTY);
-    showToast("✓ Quotation added.");
+    showToast(`✓ ${viewMode === "billing" ? "Billing" : "Quotation"} added.`);
   };
 
   /* Save edit */
@@ -67,18 +74,28 @@ function Page() {
   const cancelAdd  = () => { setIsAdding(false); setNewEntry(EMPTY); };
   const cancelEdit = () => { setEditingId(null); setEditEntry(EMPTY); };
 
+  const filteredRecords = records.filter((r) =>
+    viewMode === "billing"
+      ? r.type === "bill"
+      : r.type !== "bill"
+  );
+
   const stats = [
-    { label: "Accepted", value: records.filter((r) => r.status === "Accepted").length },
-    { label: "Sent",     value: records.filter((r) => r.status === "Sent").length     },
-    { label: "Pending",  value: records.filter((r) => r.status === "Pending").length  },
+    { label: "Accepted", value: filteredRecords.filter((r) => r.status === "Accepted").length },
+    { label: "Sent",     value: filteredRecords.filter((r) => r.status === "Sent").length     },
+    { label: "Pending",  value: filteredRecords.filter((r) => r.status === "Pending").length  },
+    { label: "Received", value: filteredRecords.filter((r) => r.status === "Received").length },
   ];
 
   const displayed = activeTab === "status"
-    ? records.filter((r) => r.status !== "Draft")
-    : records;
+    ? filteredRecords.filter((r) => r.status !== "Draft")
+    : filteredRecords;
 
   return (
-    <DashboardLayout title="Quotation" subtitle="Manage quotes and track order statuses.">
+    <DashboardLayout
+      title={viewMode === "billing" ? "Billing" : "Quotation"}
+      subtitle={viewMode === "billing" ? "Manage invoices and billing records." : "Manage quotes and track order statuses."}
+    >
 
       {/* Toast */}
       {toast && (
@@ -87,21 +104,34 @@ function Page() {
         </div>
       )}
 
+      {/* Top controls */}
+      <div className="grid gap-3 sm:grid-cols-2 mb-6">
+          <div className="rounded-3xl bg-card border border-border p-5 shadow-soft">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.32em] text-muted-foreground"></p>
+                <h3 className="mt-3 text-lg font-semibold">Quotation</h3>
+              </div>
+              <Btn variant={viewMode === "quotation" ? "accent" : "ghost"} onClick={() => setViewMode("quotation")}>Quotation</Btn>
+            </div>
+            <p className="mt-4 text-sm text-muted-foreground">Show quotes and order tracking records.</p>
+          </div>
+          <div className="rounded-3xl bg-card border border-border p-5 shadow-soft">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.32em] text-muted-foreground"></p>
+                <h3 className="mt-3 text-lg font-semibold">Billing</h3>
+              </div>
+              <Btn variant={viewMode === "billing" ? "accent" : "ghost"} onClick={() => setViewMode("billing")}>Billing</Btn>
+            </div>
+            <p className="mt-4 text-sm text-muted-foreground">Show invoices and billing records.</p>
+          </div>
+      </div>
+
       {/* Overview cards */}
-      <Section title="Quotation Overview">
+      <Section title={`${viewMode === "billing" ? "Billing" : "Quotation"} Overview`}>
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           {stats.map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}
-          <button
-            onClick={() => setActiveTab((t) => (t === "status" ? "all" : "status"))}
-            className={`flex flex-col items-start justify-between rounded-2xl border p-4 sm:p-5 transition-all text-left ${
-              activeTab === "status"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card hover:bg-secondary/50 border-border"
-            }`}
-          >
-            <span className="text-xs sm:text-sm font-medium opacity-80 uppercase tracking-wider">Order Tracking</span>
-            <span className="mt-2 text-xl sm:text-3xl font-display font-semibold">STATUS</span>
-          </button>
         </div>
       </Section>
 
@@ -109,14 +139,14 @@ function Page() {
 
       {/* Records table */}
       <Section
-        title={activeTab === "status" ? "Order Tracking Status" : "All Quotations & Bills"}
+        title={activeTab === "status" ? "Order Tracking Status" : `All ${viewMode === "billing" ? "Billing" : "Quotations"}`}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row justify-between gap-2">
             <Link to="/billing/create">
               <Btn variant="ghost">Create Invoice</Btn>
             </Link>
             <Btn variant="accent" onClick={() => { setIsAdding(true); cancelEdit(); }}>
-              <Plus className="h-4 w-4" /> New Quotation
+              <Plus className="h-4 w-4" /> New {viewMode === "billing" ? "Billing" : "Quotation"}
             </Btn>
           </div>
         }
@@ -228,7 +258,7 @@ function Page() {
               {displayed.length === 0 && !isAdding && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">
-                    No records yet. Click "New Quotation" to add one.
+                    {`No records yet. Click "New ${viewMode === "billing" ? "Billing" : "Quotation"}" to add one.`}
                   </td>
                 </tr>
               )}
