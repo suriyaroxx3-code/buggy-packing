@@ -1,5 +1,6 @@
-﻿// index.jsx â€” Dashboard (converted from TSX to JSX)
+// index.jsx — Dashboard (converted from TSX to JSX)
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { billingStore } from "@/lib/store";
 import {
@@ -14,7 +15,7 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard â€” BrushPack" },
+      { title: "Dashboard — BrushPack" },
       { name: "description", content: "Overview of packing production, workforce, billing and materials." },
     ],
   }),
@@ -77,12 +78,16 @@ function Dashboard() {
   const pendingBills = bills.filter((b) => b.status === "Pending");
   const pendingBillValue = pendingBills.reduce((sum, b) => sum + (Number(b.value) || 0), 0);
 
+  // Charts use ResizeObserver which only exists in the browser — never render on server
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   return (
     <DashboardLayout
       title="Good morning, Manager"
       subtitle="Here's what's moving through the packing floor today."
     >
-      {/* â”€â”€ KPI Cards â”€â”€ */}
+      {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {[
           { label: "Units Packed Today", value: "11,100", trend: "+9.2%",         tone: "text-emerald-600" },
@@ -113,7 +118,7 @@ function Dashboard() {
         ))}
       </div>
 
-      {/* â”€â”€ Modules â”€â”€ */}
+      {/* ── Modules ── */}
       <div className="mb-3 sm:mb-4">
         <h2 className="font-display text-xl sm:text-2xl">Modules</h2>
         <p className="text-sm text-muted-foreground">Everything you need to run the packing floor.</p>
@@ -152,7 +157,7 @@ function Dashboard() {
         ))}
       </div>
 
-      {/* â”€â”€ Chart + Activity â”€â”€ */}
+      {/* ── Chart + Activity ── */}
       <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="lg:col-span-2 rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-soft hover-lift">
           <div className="flex items-start justify-between mb-3 gap-2">
@@ -165,21 +170,25 @@ function Dashboard() {
             </Link>
           </div>
           <div className="h-36 sm:h-40">
-            <ResponsiveContainer>
-              <AreaChart data={trend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#6b5ca5" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="#6b5ca5" stopOpacity={0}   />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="d" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid oklch(0.92 0.012 260)", fontSize: 12 }} />
-                <Area type="monotone" dataKey="v" stroke="#6b5ca5" strokeWidth={2.5} fill="url(#g1)" animationDuration={1200} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {mounted ? (
+              <ResponsiveContainer>
+                <AreaChart data={trend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"   stopColor="#6b5ca5" stopOpacity={0.5} />
+                      <stop offset="100%" stopColor="#6b5ca5" stopOpacity={0}   />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="d" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid oklch(0.92 0.012 260)", fontSize: 12 }} />
+                  <Area type="monotone" dataKey="v" stroke="#6b5ca5" strokeWidth={2.5} fill="url(#g1)" animationDuration={1200} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full rounded-lg bg-secondary/30 animate-pulse" />
+            )}
           </div>
         </div>
 
@@ -187,10 +196,10 @@ function Dashboard() {
           <h3 className="font-display text-base sm:text-lg mb-4">Recent Activity</h3>
           <ul className="space-y-3 sm:space-y-4">
             {[
-              ["Order PK-2381 â€” 2,400 units packed",       "12 min ago", "bg-primary"    ],
+              ["Order PK-2381 — 2,400 units packed",       "12 min ago", "bg-primary"    ],
               ["Salary processed for 22 daily workers",    "1 hr ago",   "bg-accent"     ],
               ["Quotation Q-104 sent to BrightBrush Co.",  "3 hr ago",   "bg-primary"    ],
-              ["Cardboard sleeves â€” running low",          "Today",      "bg-destructive"],
+              ["Cardboard sleeves — running low",          "Today",      "bg-destructive"],
             ].map(([t, w, c], i) => (
               <li key={t} style={{ animationDelay: `${i * 90}ms` }} className="animate-fade-in flex gap-3">
                 <span className={`mt-1.5 h-2 w-2 rounded-full ${c} animate-pulse shrink-0`} />

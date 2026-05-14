@@ -1,4 +1,4 @@
-﻿// PageHelpers.jsx â€” shared UI primitives (converted from TSX to JSX)
+// PageHelpers.jsx — shared UI primitives (converted from TSX to JSX)
 
 export function Section({ title, action, children }) {
   return (

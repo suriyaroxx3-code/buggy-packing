@@ -15,56 +15,24 @@ const K = {
   users:       "bp_users",
 };
 
-// ── Seed data (used only on first load, never duplicated) ───────
-const TODAY = new Date().toISOString().slice(0, 10);
-const addDays = (n) => {
-  const d = new Date(); d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+// ── Seed data — all empty so only real manually-entered data is stored ─────
+const SEEDS = {
+  contractors: [],
+  workers:     [],
+  stock:       [],
+  batches:     [],
+  billing:     [],
+  deadlines:   [],
 };
 
-const SEEDS = {
-  contractors: [
-    { id: "c1", name: "Suresh Pillai", area: "Cardboard Packing",  workers: 22, amount: 68000, status: "Paid"    },
-    { id: "c2", name: "Rekha Menon",   area: "Plastic Sleeve Line", workers: 18, amount: 55000, status: "Pending" },
-    { id: "c3", name: "Arjun Nair",    area: "Blister Pack",        workers: 14, amount: 44000, status: "Paid"    },
-    { id: "c4", name: "Divya Thomas",  area: "QC & Dispatch",       workers: 16, amount: 51000, status: "Pending" },
-    { id: "c5", name: "Biju Varghese", area: "Labelling",           workers: 12, amount: 39000, status: "Paid"    },
-  ],
-  workers: [
-    { id: "w1", emp_id: "EMP001", name: "Ravi Kumar",   role: "Packer",       hours: 8, rate: 80,  present: true  },
-    { id: "w2", emp_id: "EMP002", name: "Meena Devi",   role: "Sorter",       hours: 8, rate: 70,  present: true  },
-    { id: "w3", emp_id: "EMP003", name: "Arun Sinha",   role: "QC Inspector", hours: 8, rate: 100, present: true  },
-    { id: "w4", emp_id: "EMP004", name: "Latha Rao",    role: "Packer",       hours: 6, rate: 80,  present: true  },
-    { id: "w5", emp_id: "EMP005", name: "Vinod Pillai", role: "Loader",       hours: 0, rate: 90,  present: false },
-    { id: "w6", emp_id: "EMP006", name: "Priya Nair",   role: "Helper",       hours: 8, rate: 65,  present: true  },
-  ],
-  stock: [
-    { id: "s1", name: "Cardboard Sheets - A4",        cat: "Cardboard", qty: 4200, unit: "sheets", min: 2000 },
-    { id: "s2", name: "Cardboard Boxes - Small",      cat: "Cardboard", qty: 1100, unit: "pcs",    min: 1500 },
-    { id: "s3", name: "Plastic Sleeves - Clear 12mm", cat: "Plastic",   qty: 8400, unit: "pcs",    min: 3000 },
-    { id: "s4", name: "Blister Cards - 18mm",         cat: "Plastic",   qty: 920,  unit: "pcs",    min: 1500 },
-    { id: "s5", name: "Printed Labels (Roll)",        cat: "Supplies",  qty: 32,   unit: "rolls",  min: 20   },
-    { id: "s6", name: "Sealing Tape - 48mm",          cat: "Supplies",  qty: 14,   unit: "rolls",  min: 30   },
-    { id: "s7", name: "Hot Glue Sticks",              cat: "Supplies",  qty: 540,  unit: "pcs",    min: 200  },
-  ],
-  batches: [
-    { id: "b1", batch: "PK-2381", product: "Round Tip 12mm — Cardboard",     input: 2500, output: 2480 },
-    { id: "b2", batch: "PK-2380", product: "Flat Tip 18mm — Plastic Sleeve", input: 1800, output: 1792 },
-    { id: "b3", batch: "PK-2379", product: "Angled Tip 10mm — Blister Pack", input: 3200, output: 3168 },
-    { id: "b4", batch: "PK-2378", product: "Detail Tip 6mm — Cardboard Box", input: 1600, output: 1590 },
-  ],
-  billing: [],
-  deadlines: [
-    { id: "d1", orderId: "PK-2381", product: "Round Tip 12mm — Cardboard",     client: "BrightBrush Co.",  deadline: addDays(2),   priority: "High",   status: "On Track",  assignedTo: "Suresh Pillai",  notes: "Client requested priority packing." },
-    { id: "d2", orderId: "PK-2380", product: "Flat Tip 18mm — Plastic Sleeve", client: "ArtPro Supplies",  deadline: addDays(1),   priority: "Medium", status: "At Risk",   assignedTo: "Rekha Menon",    notes: "Sleeve stock running low." },
-    { id: "d3", orderId: "PK-2379", product: "Angled Tip 10mm — Blister Pack", client: "Studio Mart",      deadline: addDays(-2),  priority: "High",   status: "Overdue",   assignedTo: "Arjun Nair",     notes: "Delayed due to QC failure." },
-    { id: "d4", orderId: "PK-2378", product: "Detail Tip 6mm — Cardboard Box", client: "ColorWorks",       deadline: addDays(8),   priority: "Low",    status: "On Track",  assignedTo: "Divya Thomas",   notes: "" },
-    { id: "d5", orderId: "PK-2377", product: "Fan Tip 25mm — Blister Card",    client: "Maven Brushes",    deadline: addDays(-1),  priority: "Medium", status: "Completed", assignedTo: "Biju Varghese",  notes: "Dispatched successfully." },
-  ],
-};
+// ── SSR / browser guard ────────────────────────────────────────
+// localStorage does not exist during server-side rendering (TanStack Start / SSR).
+// All reads return null on the server; writes are silently skipped.
+const isBrowser = typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
 // ── Helpers ────────────────────────────────────────────────────
 function read(key) {
+  if (!isBrowser) return null;
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -75,6 +43,7 @@ function read(key) {
 }
 
 function write(key, data) {
+  if (!isBrowser) return;
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch {
@@ -226,16 +195,36 @@ export const deadlineStore = {
   },
 };
 
-// -- Batches (production output) ----------------------------------------------
+// -- Batches / Dispatch Tracking -----------------------------------------------
+export const DISPATCH_STATUSES = ["Pending", "In Transit", "Dispatched", "Cancelled"];
+
 export const batchStore = {
   getAll() { return getAll('batches'); },
   save(list) { setAll('batches', list); },
   add(data) {
-    const list = this.getAll();
-    const entry = { ...data, id: uid() };
+    const TODAY = new Date().toISOString().slice(0, 10);
+    const list  = this.getAll();
+    const entry = {
+      dispatchStatus: "Pending",
+      date: TODAY,
+      statusUpdatedAt: TODAY,
+      ...data,
+      id: uid(),
+    };
     const updated = [entry, ...list];
     this.save(updated);
     return entry;
+  },
+  /** Update any fields (e.g. dispatchStatus) for an existing batch entry */
+  update(id, patch) {
+    const TODAY = new Date().toISOString().slice(0, 10);
+    const list  = this.getAll().map((b) =>
+      b.id === id
+        ? { ...b, ...patch, statusUpdatedAt: TODAY }
+        : b
+    );
+    this.save(list);
+    return list;
   },
   remove(id) {
     const list = this.getAll().filter((b) => b.id !== id);
@@ -328,10 +317,15 @@ export const userStore = {
 const SESSION_KEY = "bp_session";
 export const sessionStore = {
   get() {
+    if (!isBrowser) return null;
     try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
   },
   set(user) {
+    if (!isBrowser) return;
     localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username, role: user.role }));
   },
-  clear() { localStorage.removeItem(SESSION_KEY); },
+  clear() {
+    if (!isBrowser) return;
+    localStorage.removeItem(SESSION_KEY);
+  },
 };

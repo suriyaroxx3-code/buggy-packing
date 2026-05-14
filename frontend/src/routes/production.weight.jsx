@@ -1,23 +1,31 @@
-// production.weight.jsx — Dispatch Tracking, fully static localStorage-backed
+// production.weight.jsx — Dispatch Tracking, manual-entry only, localStorage-backed
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat, Field, inputCls, Btn, Pill } from "@/components/PageHelpers";
-import { batchStore } from "@/lib/store";
-import { Plus, PackageCheck, Trash2 } from "lucide-react";
+import { batchStore, DISPATCH_STATUSES } from "@/lib/store";
+import { PackageCheck, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/production/weight")({
   head: () => ({ meta: [{ title: "Dispatch Tracking — BrushPack" }] }),
   component: Page,
 });
 
-const EMPTY = { batchNo: "", product: "", input: "", output: "" };
+const EMPTY = { batchNo: "", product: "", input: "", output: "", dispatchStatus: "Pending" };
+
+// Pill tone per dispatch status
+function dispatchTone(s) {
+  if (s === "Dispatched")  return "success";
+  if (s === "In Transit")  return "info";
+  if (s === "Cancelled")   return "danger";
+  return "warn"; // Pending
+}
 
 function Page() {
-  const [rows, setRows]   = useState(() => batchStore.getAll());
-  const [form, setForm]   = useState(EMPTY);
+  const [rows,   setRows]   = useState(() => batchStore.getAll());
+  const [form,   setForm]   = useState(EMPTY);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast,  setToast]  = useState("");
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
 
@@ -25,10 +33,11 @@ function Page() {
   const outN = parseFloat(form.output) || 0;
   const remaining = Math.max(0, inN - outN);
 
-  const totalReceived = rows.reduce((s, r) => s + r.input,  0);
-  const totalPacked   = rows.reduce((s, r) => s + r.output, 0);
+  const totalReceived = rows.reduce((s, r) => s + (r.input  || 0), 0);
+  const totalPacked   = rows.reduce((s, r) => s + (r.output || 0), 0);
   const totalPending  = totalReceived - totalPacked;
 
+  // ── Save new batch entry ──────────────────────────────────────
   const saveEntry = () => {
     if (!form.batchNo.trim()) { alert("Batch number is required."); return; }
     if (!form.product.trim()) { alert("Product / pack type is required."); return; }
@@ -38,15 +47,22 @@ function Page() {
 
     setSaving(true);
     const entry = batchStore.add({
-      batch:   form.batchNo.trim(),
-      product: form.product.trim(),
-      input:   inN,
-      output:  outN,
+      batch:          form.batchNo.trim(),
+      product:        form.product.trim(),
+      input:          inN,
+      output:         outN,
+      dispatchStatus: form.dispatchStatus,
     });
     setRows(batchStore.getAll());
     setForm(EMPTY);
     setSaving(false);
-    showToast(`✓ Batch ${entry.batch} saved.`);
+    showToast(`Batch ${entry.batch} saved.`);
+  };
+
+  // ── Inline status update ──────────────────────────────────────
+  const updateStatus = (id, newStatus) => {
+    setRows(batchStore.update(id, { dispatchStatus: newStatus }));
+    showToast(`Status updated to "${newStatus}".`);
   };
 
   const deleteRow = (id) => {
@@ -60,7 +76,7 @@ function Page() {
   return (
     <DashboardLayout
       title="Dispatch Tracking"
-      subtitle="Track received tips, packed units and dispatched batches per order."
+      subtitle="Track received tips, packed units and dispatch status per order — enter real data only."
     >
       {/* Toast */}
       {toast && (
@@ -71,14 +87,14 @@ function Page() {
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-        <Stat label="Tips Received Today"  value={`${totalReceived.toLocaleString()} units`} hint={`${rows.length} batches`} />
-        <Stat label="Packed Today"         value={`${totalPacked.toLocaleString()} units`}   hint="Sealed & labelled" />
-        <Stat label="Remaining"            value={`${totalPending.toLocaleString()} units`}  hint="Pending across batches" />
+        <Stat label="Tips Received"  value={`${totalReceived.toLocaleString()} units`} hint={`${rows.length} batches`} />
+        <Stat label="Packed"         value={`${totalPacked.toLocaleString()} units`}   hint="Sealed & labelled" />
+        <Stat label="Remaining"      value={`${totalPending.toLocaleString()} units`}  hint="Pending across batches" />
       </div>
 
-      {/* Add batch form */}
-      <Section title="Add Batch Output">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* ── Add batch form ── */}
+      <Section title="Add Batch Entry">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <Field label="Batch No.">
             <input
               className={inputCls}
@@ -113,6 +129,15 @@ function Page() {
               onChange={(e) => setForm({ ...form, output: e.target.value })}
             />
           </Field>
+          <Field label="Dispatch Status">
+            <select
+              className={inputCls + " bg-card"}
+              value={form.dispatchStatus}
+              onChange={(e) => setForm({ ...form, dispatchStatus: e.target.value })}
+            >
+              {DISPATCH_STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
         </div>
 
         <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
@@ -132,35 +157,49 @@ function Page() {
 
       <div className="h-5 sm:h-6" />
 
-      {/* Batches table */}
-      <Section title="Recent Batches">
+      {/* ── Recent Patches table ── */}
+      <Section title="Recent Patches">
         <div className="overflow-x-auto -mx-4 sm:-mx-6">
-          <table className="w-full text-sm min-w-[600px]">
+          <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
                 <th className="px-4 sm:px-6 py-3">Batch</th>
                 <th className="px-4 sm:px-6 py-3">Product / Pack</th>
+                <th className="px-4 sm:px-6 py-3">Date</th>
                 <th className="px-4 sm:px-6 py-3">Received</th>
                 <th className="px-4 sm:px-6 py-3">Packed</th>
                 <th className="px-4 sm:px-6 py-3">Remaining</th>
-                <th className="px-4 sm:px-6 py-3">Status</th>
+                <th className="px-4 sm:px-6 py-3">Dispatch Status</th>
                 <th className="px-4 sm:px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
-                const rem = r.input - r.output;
+                const rem = (r.input || 0) - (r.output || 0);
+                const ds  = r.dispatchStatus || "Pending";
                 return (
                   <tr key={r.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/30 transition">
                     <td className="px-4 sm:px-6 py-3 font-medium whitespace-nowrap">{r.batch}</td>
-                    <td className="px-4 sm:px-6 py-3 text-muted-foreground">{r.product}</td>
-                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap">{r.input.toLocaleString()}</td>
-                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap">{r.output.toLocaleString()}</td>
+                    <td className="px-4 sm:px-6 py-3 text-muted-foreground max-w-[180px] truncate">{r.product}</td>
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-muted-foreground text-xs">
+                      {r.date || "—"}
+                    </td>
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap">{(r.input  || 0).toLocaleString()}</td>
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap">{(r.output || 0).toLocaleString()}</td>
                     <td className="px-4 sm:px-6 py-3 whitespace-nowrap">{rem.toLocaleString()}</td>
                     <td className="px-4 sm:px-6 py-3">
-                      <Pill tone={rem === 0 ? "success" : "warn"}>
-                        {rem === 0 ? "Completed" : "Pending"}
-                      </Pill>
+                      <div className="flex flex-col gap-1.5">
+                        {/* Inline status update dropdown */}
+                        <select
+                          value={ds}
+                          onChange={(e) => updateStatus(r.id, e.target.value)}
+                          className="rounded-lg border border-border bg-card text-xs px-2 py-1.5 outline-none focus:ring-2 focus:ring-ring/40 transition cursor-pointer"
+                          style={{ minWidth: "112px" }}
+                        >
+                          {DISPATCH_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                        </select>
+                        <Pill tone={dispatchTone(ds)}>{ds}</Pill>
+                      </div>
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-right">
                       <button
@@ -176,14 +215,19 @@ function Page() {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground text-sm">
-                    No batches yet. Add one above.
+                  <td colSpan={8} className="px-6 py-10 text-center text-muted-foreground text-sm">
+                    No batches yet — add a real entry above.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        {rows.length > 0 && (
+          <div className="mt-3 px-1 text-xs text-muted-foreground">
+            Use the dropdown in the <strong>Dispatch Status</strong> column to update a batch status instantly.
+          </div>
+        )}
       </Section>
     </DashboardLayout>
   );

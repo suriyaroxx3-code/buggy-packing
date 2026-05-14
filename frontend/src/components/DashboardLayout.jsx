@@ -1,4 +1,4 @@
-﻿// DashboardLayout.jsx â€” main shell with new teal + dark-slate colour scheme
+// DashboardLayout.jsx — main shell with new teal + dark-slate colour scheme
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
@@ -44,7 +44,7 @@ const groups = [
   },
 ];
 
-/* â”€â”€ colour tokens (must match CSS variables set in styles.css) â”€â”€ */
+/* ── colour tokens (must match CSS variables set in styles.css) ── */
 const C = {
   sidebar:        "#6b5ca5",   // left sidebar color
   sidebarBorder:  "#6b5ca5",
@@ -58,9 +58,13 @@ const C = {
   accent:         "#000000",   // amber
 };
 
-/* â”€â”€ Profile stored in localStorage â”€â”€ */
+/* ── SSR guard — localStorage is only available in the browser ── */
+const isBrowser = typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+/* ── Profile stored in localStorage ── */
 const PROFILE_KEY = "bp_profile";
 function loadProfile() {
+  if (!isBrowser) return { name: "Manager", role: "Operations Manager", email: "manager@brushpack.com" };
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     if (raw) return JSON.parse(raw);
@@ -68,6 +72,7 @@ function loadProfile() {
   return { name: "Manager", role: "Operations Manager", email: "manager@brushpack.com" };
 }
 function saveProfile(p) {
+  if (!isBrowser) return;
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
 }
 
@@ -98,6 +103,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
   useEffect(() => { setOpen(false); }, [location.pathname]);
 
   useEffect(() => {
+    if (!isBrowser) return;
     const stored = localStorage.getItem("lowStockNotifications");
     if (stored) {
       try { setNotifications(JSON.parse(stored)); } catch { setNotifications([]); }
@@ -105,6 +111,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
   }, []);
 
   useEffect(() => {
+    if (!isBrowser) return;
     if (lowStockItems?.length > 0) {
       const n = lowStockItems.map((item) => ({
         id: item.name, name: item.name, qty: item.qty,
@@ -121,18 +128,18 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
   const clearNotif = (id) => {
     const u = notifications.filter((n) => n.id !== id);
     setNotifications(u);
-    localStorage.setItem("lowStockNotifications", JSON.stringify(u));
+    if (isBrowser) localStorage.setItem("lowStockNotifications", JSON.stringify(u));
   };
 
   const clearAll = () => {
     setNotifications([]);
-    localStorage.removeItem("lowStockNotifications");
+    if (isBrowser) localStorage.removeItem("lowStockNotifications");
   };
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: C.appBg }}>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• SIDEBAR â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ══════════════ SIDEBAR ══════════════ */}
       <aside
         className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 xl:w-72 flex flex-col transition-transform duration-300 ${
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
@@ -261,10 +268,10 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
         />
       )}
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• MAIN AREA â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ══════════════ MAIN AREA ══════════════ */}
       <main className="flex-1 min-w-0 flex flex-col">
 
-        {/* â”€â”€ Top Header â”€â”€ */}
+        {/* ── Top Header ── */}
         <header
           className="sticky top-0 z-20 shrink-0"
           style={{
@@ -306,7 +313,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
             >
               <Search className="h-4 w-4 shrink-0" style={{ color: "#000000" }} />
               <input
-                placeholder="Searchâ€¦"
+                placeholder="Search…"
                 className="bg-transparent outline-none text-sm w-full"
                 style={{ color: "#000000", caretColor: "#6b5ca5" }}
               />
@@ -379,7 +386,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
                               className="text-lg leading-none mt-0.5"
                               style={{ color: "#000000" }}
                             >
-                              Ã—
+                              ×
                             </button>
                           </div>
                         </div>
@@ -394,7 +401,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
                           className="text-sm font-medium"
                           style={{ color: C.activeItem }}
                         >
-                          View all alerts â†’
+                          View all alerts →
                         </Link>
                       </div>
                     )}
@@ -403,7 +410,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
               )}
             </div>
 
-            {/* â”€â”€ Profile avatar + dropdown â”€â”€ */}
+            {/* ── Profile avatar + dropdown ── */}
             <div className="relative shrink-0">
               <button
                 onClick={() => { setProfileOpen((s) => !s); setEditingProfile(false); setPwMode(false); setPwError(""); setPwOk(""); }}
@@ -463,7 +470,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
                     </div>
 
                     {pwMode ? (
-                      /* â”€â”€ Change Password panel â”€â”€ */
+                      /* ── Change Password panel ── */
                       <div className="p-4 space-y-3">
                         <div className="flex items-center gap-2 mb-1">
                           <ShieldCheck className="h-4 w-4" style={{ color: "#6b5ca5" }} />
@@ -641,7 +648,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
           </div>
         </header>
 
-        {/* â”€â”€ Page content â”€â”€ */}
+        {/* ── Page content ── */}
         <div
           key={location.pathname}
           className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto animate-fade-in"

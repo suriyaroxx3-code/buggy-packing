@@ -1,4 +1,4 @@
-﻿// login.jsx â€” Sign-in + Create User with warehouse slideshow background
+// login.jsx — Sign-in + Create User with warehouse slideshow background
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Eye, EyeOff, Loader2, Package, UserPlus, LogIn } from "lucide-react";
@@ -7,7 +7,7 @@ import { userStore, sessionStore } from "@/lib/store";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in â€” BrushPack" },
+      { title: "Sign in — BrushPack" },
       { name: "description", content: "Manager login for BrushPack packaging operations." },
     ],
   }),
@@ -25,7 +25,7 @@ const SLIDES = [
 const INTERVAL_MS = 5000;
 const FADE_MS     = 1000;
 
-/* â”€â”€ Shared input style â”€â”€ */
+/* ── Shared input style ── */
 const inputStyle = {
   border: "1.5px solid #6b5ca5",
   backgroundColor: "#ffffff",
@@ -71,7 +71,7 @@ function LoginPage() {
 
   const nextIdx = (idx + 1) % SLIDES.length;
 
-  /* â”€â”€ Sign In submit â”€â”€ */
+  /* ── Sign In submit ── */
   const submitSignIn = (e) => {
     e.preventDefault();
     setSiError("");
@@ -90,7 +90,7 @@ function LoginPage() {
     }, 500);
   };
 
-  /* â”€â”€ Create User submit â”€â”€ */
+  /* ── Create User submit ── */
   const submitCreate = (e) => {
     e.preventDefault();
     setCuError(""); setCuOk("");
@@ -117,7 +117,7 @@ function LoginPage() {
     }, 400);
   };
 
-  /* â”€â”€ Tab button â”€â”€ */
+  /* ── Tab button ── */
   function TabBtn({ id, icon: Icon, label }) {
     const active = tab === id;
     return (
@@ -183,7 +183,7 @@ function LoginPage() {
             <TabBtn id="create" icon={UserPlus} label="Create User"  />
           </div>
 
-          {/* â”€â”€ SIGN IN FORM â”€â”€ */}
+          {/* ── SIGN IN FORM ── */}
           {tab === "signin" && (
             <form onSubmit={submitSignIn} className="space-y-4 sm:space-y-5">
               {siError && (
@@ -216,7 +216,7 @@ function LoginPage() {
                     onChange={(e) => setSiPass(e.target.value)}
                     required
                     autoComplete="current-password"
-                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                    placeholder="••••••••"
                     className="w-full rounded-xl px-4 py-2.5 sm:py-3 pr-11 text-sm outline-none transition"
                     style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = "#000000")}
@@ -233,12 +233,12 @@ function LoginPage() {
 
               <button type="submit" disabled={siLoading} className="w-full rounded-xl py-2.5 sm:py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-all" style={{ backgroundColor: "#000000", color: "#ffffff", cursor: siLoading ? "not-allowed" : "pointer", boxShadow: siLoading ? "none" : "0 4px 16px rgba(0,0,0,0.35)" }}>
                 {siLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {siLoading ? "Signing inâ€¦" : "Sign In"}
+                {siLoading ? "Signing in…" : "Sign In"}
               </button>
             </form>
           )}
 
-          {/* â”€â”€ CREATE USER FORM â”€â”€ */}
+          {/* ── CREATE USER FORM ── */}
           {tab === "create" && (
             <form onSubmit={submitCreate} className="space-y-4">
               {cuError && (
@@ -327,13 +327,13 @@ function LoginPage() {
 
               <button type="submit" disabled={cuLoading} className="w-full rounded-xl py-2.5 sm:py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-all" style={{ backgroundColor: "#000000", color: "#ffffff", cursor: cuLoading ? "not-allowed" : "pointer", boxShadow: cuLoading ? "none" : "0 4px 16px rgba(0,0,0,0.35)" }}>
                 {cuLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {cuLoading ? "Creatingâ€¦" : "Create User"}
+                {cuLoading ? "Creating…" : "Create User"}
               </button>
             </form>
           )}
 
           <p className="text-xs text-center mt-6" style={{ color: "#000000" }}>
-            BrushPack Packaging Operations Â· Manager Portal
+            BrushPack Packaging Operations · Manager Portal
           </p>
         </div>
       </div>

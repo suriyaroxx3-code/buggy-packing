@@ -1,6 +1,6 @@
-﻿// production.weekly-report.jsx â€” Combined Weekly + Monthly Reports
+// production.weekly-report.jsx — Combined Weekly + Monthly Reports
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat } from "@/components/PageHelpers";
 import {
@@ -9,11 +9,11 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/production/weekly-report")({
-  head: () => ({ meta: [{ title: "Reports â€” BrushPack" }] }),
+  head: () => ({ meta: [{ title: "Reports — BrushPack" }] }),
   component: Page,
 });
 
-/* â”€â”€ Weekly data (Monâ€“Sun) â”€â”€ */
+/* ── Weekly data (Mon–Sun) ── */
 const weeklyData = [
   { d: "Mon", received: 8400,  packed: 8200  },
   { d: "Tue", received: 9600,  packed: 9450  },
@@ -29,7 +29,7 @@ const weeklyEfficiency = weeklyData.map((x) => ({
   e: +(100 * x.packed / x.received).toFixed(1),
 }));
 
-/* â”€â”€ Monthly data (Week 1â€“4 + full-month totals by type) â”€â”€ */
+/* ── Monthly data (Week 1–4 + full-month totals by type) ── */
 const monthlyData = [
   { d: "Wk 1", received: 58200,  packed: 57100  },
   { d: "Wk 2", received: 63950,  packed: 62650  },
@@ -50,7 +50,7 @@ const monthlyProductMix = [
   { name: "Fan Tip 25mm",    units: 22050 },
 ];
 
-/* â”€â”€ Tab button â”€â”€ */
+/* ── Tab button ── */
 function Tab({ label, active, onClick }) {
   return (
     <button
@@ -76,14 +76,18 @@ function Page() {
   const [tab, setTab] = useState("weekly");
   const isWeekly = tab === "weekly";
 
-  /* â”€â”€ Weekly KPIs â”€â”€ */
+  // Charts use ResizeObserver which only exists in the browser — never render on server
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  /* ── Weekly KPIs ── */
   const weeklyStats = [
     { label: "Tips Received",    value: "63,950",  hint: "This week" },
     { label: "Units Packed",     value: "62,650",  hint: "98.0% yield" },
     { label: "Avg. Efficiency",  value: "98.0%",   hint: "+0.4% vs last week" },
   ];
 
-  /* â”€â”€ Monthly KPIs â”€â”€ */
+  /* ── Monthly KPIs ── */
   const totalReceived = monthlyData.reduce((s, r) => s + r.received, 0);
   const totalPacked   = monthlyData.reduce((s, r) => s + r.packed, 0);
   const avgEff        = +(100 * totalPacked / totalReceived).toFixed(1);
@@ -100,7 +104,7 @@ function Page() {
   return (
     <DashboardLayout
       title="Reports"
-      subtitle="Packing trends, line efficiency and dispatch summaries â€” weekly & monthly."
+      subtitle="Packing trends, line efficiency and dispatch summaries — weekly & monthly."
     >
       {/* Tab switcher */}
       <div
@@ -121,17 +125,21 @@ function Page() {
       {/* Received vs Packed */}
       <Section title={isWeekly ? "Daily Received vs Packed (units)" : "Weekly Received vs Packed (units)"}>
         <div className="h-56 sm:h-72">
-          <ResponsiveContainer>
-            <BarChart data={barData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
-              <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="d" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="received" name="Received" fill="#6b5ca5" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="packed"   name="Packed"   fill="#000000" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {mounted ? (
+            <ResponsiveContainer>
+              <BarChart data={barData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
+                <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="d" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="received" name="Received" fill="#6b5ca5" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="packed"   name="Packed"   fill="#000000" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full w-full rounded-lg bg-secondary/30 animate-pulse" />
+          )}
         </div>
       </Section>
 
@@ -140,22 +148,26 @@ function Page() {
       {/* Efficiency */}
       <Section title={isWeekly ? "Daily Efficiency (%)" : "Weekly Efficiency (%)"}>
         <div className="h-48 sm:h-64">
-          <ResponsiveContainer>
-            <LineChart data={lineData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
-              <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="d" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-              <YAxis domain={[95, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
-              <Line
-                type="monotone"
-                dataKey="e"
-                name="Efficiency %"
-                stroke="#6b5ca5"
-                strokeWidth={3}
-                dot={{ r: 4, fill: "#000000" }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {mounted ? (
+            <ResponsiveContainer>
+              <LineChart data={lineData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
+                <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="d" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                <YAxis domain={[95, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
+                <Line
+                  type="monotone"
+                  dataKey="e"
+                  name="Efficiency %"
+                  stroke="#6b5ca5"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: "#000000" }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full w-full rounded-lg bg-secondary/30 animate-pulse" />
+          )}
         </div>
       </Section>
 
@@ -165,26 +177,30 @@ function Page() {
           <div className="h-5 sm:h-6" />
           <Section title="Monthly Product Mix (units packed)">
             <div className="h-48 sm:h-64">
-              <ResponsiveContainer>
-                <BarChart
-                  data={monthlyProductMix}
-                  layout="vertical"
-                  margin={{ top: 5, right: 16, left: 10, bottom: 0 }}
-                >
-                  <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={130}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
-                  <Bar dataKey="units" name="Units" fill="#6b5ca5" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {mounted ? (
+                <ResponsiveContainer>
+                  <BarChart
+                    data={monthlyProductMix}
+                    layout="vertical"
+                    margin={{ top: 5, right: 16, left: 10, bottom: 0 }}
+                  >
+                    <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={130}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
+                    <Bar dataKey="units" name="Units" fill="#6b5ca5" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full rounded-lg bg-secondary/30 animate-pulse" />
+              )}
             </div>
           </Section>
         </>

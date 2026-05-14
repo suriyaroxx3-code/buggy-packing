@@ -137,10 +137,24 @@ function Page() {
                     <input className={inputCls} value={it.desc} onChange={(e) => update(idx, "desc", e.target.value)} placeholder="Item description" />
                   </td>
                   <td className="px-4 sm:px-6 py-2">
-                    <input type="number" min="0" className={inputCls} value={it.qty} onChange={(e) => update(idx, "qty", e.target.value)} />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className={inputCls}
+                      value={it.qty}
+                      onChange={(e) => update(idx, "qty", e.target.value.replace(/[^0-9]/g, ""))}
+                    />
                   </td>
                   <td className="px-4 sm:px-6 py-2">
-                    <input type="number" min="0" className={inputCls} value={it.rate} onChange={(e) => update(idx, "rate", e.target.value)} />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className={inputCls}
+                      value={it.rate}
+                      onChange={(e) => update(idx, "rate", e.target.value.replace(/[^0-9]/g, ""))}
+                    />
                   </td>
                   <td className="px-4 sm:px-6 py-2 text-right font-medium whitespace-nowrap">
                     ₹{(it.qty * it.rate).toLocaleString("en-IN")}

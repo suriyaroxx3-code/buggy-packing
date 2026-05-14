@@ -1,4 +1,4 @@
-﻿// production.deadline.jsx â€” Deadline Tracking
+// production.deadline.jsx — Deadline Tracking
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -7,7 +7,7 @@ import { deadlineStore } from "@/lib/store";
 import { CalendarClock, Trash2, Pencil, X, Check } from "lucide-react";
 
 export const Route = createFileRoute("/production/deadline")({
-  head: () => ({ meta: [{ title: "Deadline Tracking â€” BrushPack" }] }),
+  head: () => ({ meta: [{ title: "Deadline Tracking — BrushPack" }] }),
   component: Page,
 });
 
@@ -25,7 +25,7 @@ const EMPTY = {
   notes:      "",
 };
 
-/* â”€â”€ status â†’ pill tone â”€â”€ */
+/* ── status → pill tone ── */
 function statusTone(s) {
   if (s === "Completed") return "success";
   if (s === "Overdue")   return "danger";
@@ -33,14 +33,14 @@ function statusTone(s) {
   return "info";
 }
 
-/* â”€â”€ priority â†’ pill tone â”€â”€ */
+/* ── priority → pill tone ── */
 function priorityTone(p) {
   if (p === "High")   return "danger";
   if (p === "Medium") return "warn";
   return "muted";
 }
 
-/* â”€â”€ days until deadline â”€â”€ */
+/* ── days until deadline ── */
 function daysUntil(dateStr) {
   if (!dateStr) return null;
   const diff = Math.round((new Date(dateStr) - new Date()) / 86400000);
@@ -57,13 +57,13 @@ function Page() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2800); };
 
-  /* â”€â”€ KPIs â”€â”€ */
+  /* ── KPIs ── */
   const overdue    = rows.filter((r) => r.status === "Overdue").length;
   const atRisk     = rows.filter((r) => r.status === "At Risk").length;
   const onTrack    = rows.filter((r) => r.status === "On Track").length;
   const completed  = rows.filter((r) => r.status === "Completed").length;
 
-  /* â”€â”€ Save / update â”€â”€ */
+  /* ── Save / update ── */
   const saveEntry = () => {
     if (!form.orderId.trim())  { alert("Order ID is required.");    return; }
     if (!form.product.trim())  { alert("Product is required.");     return; }
@@ -74,12 +74,12 @@ function Page() {
     if (editId) {
       const updated = deadlineStore.update(editId, form);
       setRows(updated);
-      showToast(`âœ“ Deadline for ${form.orderId} updated.`);
+      showToast(`✓ Deadline for ${form.orderId} updated.`);
       setEditId(null);
     } else {
       deadlineStore.add(form);
       setRows(deadlineStore.getAll());
-      showToast(`âœ“ Deadline for ${form.orderId} saved.`);
+      showToast(`✓ Deadline for ${form.orderId} saved.`);
     }
     setForm(EMPTY);
     setSaving(false);
@@ -99,11 +99,11 @@ function Page() {
 
   const cancelEdit = () => { setEditId(null); setForm(EMPTY); };
 
-  /* â”€â”€ Filter â”€â”€ */
+  /* ── Filter ── */
   const filterOptions = ["All", "On Track", "At Risk", "Overdue", "Completed"];
   const visible = filter === "All" ? rows : rows.filter((r) => r.status === filter);
 
-  /* â”€â”€ Select helper â”€â”€ */
+  /* ── Select helper ── */
   const selectCls = inputCls + " bg-card";
 
   return (
@@ -118,7 +118,7 @@ function Page() {
         </div>
       )}
 
-      {/* â”€â”€ KPI row â”€â”€ */}
+      {/* ── KPI row ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <Stat label="Overdue"   value={String(overdue)}   hint="Need immediate action" />
         <Stat label="At Risk"   value={String(atRisk)}    hint="Monitor closely" />
@@ -126,9 +126,9 @@ function Page() {
         <Stat label="Completed" value={String(completed)} hint="Dispatched" />
       </div>
 
-      {/* â”€â”€ Add / Edit form â”€â”€ */}
+      {/* ── Add / Edit form ── */}
       <Section
-        title={editId ? `Edit Deadline â€” ${form.orderId}` : "Add Deadline"}
+        title={editId ? `Edit Deadline — ${form.orderId}` : "Add Deadline"}
         action={editId ? (
           <Btn variant="ghost" onClick={cancelEdit}>
             <X className="h-4 w-4" /> Cancel Edit
@@ -147,7 +147,7 @@ function Page() {
           <Field label="Product / Pack Type">
             <input
               className={inputCls}
-              placeholder="Round Tip 12mm â€” Cardboard"
+              placeholder="Round Tip 12mm — Cardboard"
               value={form.product}
               onChange={(e) => setForm({ ...form, product: e.target.value })}
             />
@@ -212,14 +212,14 @@ function Page() {
           )}
           <Btn onClick={saveEntry} disabled={saving}>
             <CalendarClock className="h-4 w-4" />
-            {saving ? "Savingâ€¦" : editId ? "Update Deadline" : "Save Deadline"}
+            {saving ? "Saving…" : editId ? "Update Deadline" : "Save Deadline"}
           </Btn>
         </div>
       </Section>
 
       <div className="h-5 sm:h-6" />
 
-      {/* â”€â”€ Table â”€â”€ */}
+      {/* ── Table ── */}
       <Section
         title="All Deadlines"
         action={
@@ -260,7 +260,7 @@ function Page() {
               {visible.map((r) => {
                 const days = daysUntil(r.deadline);
                 const daysLabel =
-                  days === null ? "â€”"
+                  days === null ? "—"
                   : days === 0  ? "Today"
                   : days < 0   ? `${Math.abs(days)}d overdue`
                   :              `${days}d left`;
@@ -281,7 +281,7 @@ function Page() {
                       <div className="text-xs text-muted-foreground">{r.client}</div>
                     </td>
                     <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-muted-foreground">
-                      {r.deadline || "â€”"}
+                      {r.deadline || "—"}
                     </td>
                     <td className="px-4 sm:px-6 py-3 whitespace-nowrap font-semibold" style={{ color: daysColor }}>
                       {daysLabel}
@@ -293,7 +293,7 @@ function Page() {
                       <Pill tone={statusTone(r.status)}>{r.status}</Pill>
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-muted-foreground whitespace-nowrap">
-                      {r.assignedTo || "â€”"}
+                      {r.assignedTo || "—"}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
