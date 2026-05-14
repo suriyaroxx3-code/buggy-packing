@@ -4,6 +4,13 @@ import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat, Field, inputCls, Btn, Pill } from "@/components/PageHelpers";
 import { stockStore } from "@/lib/store";
+import blisterCard from "@/assets/blister-card.webp";
+import cardboardBoxes from "@/assets/cardboard boxes.avif";
+import cardboardSheets from "@/assets/cardboard sheets-A4.avif";
+import hotGlueSticks from "@/assets/hot glue sticks.jpg";
+import plasticSleeves from "@/assets/plastic-sleeves.webp";
+import printedLabels from "@/assets/Printed Labels-Roll.webp";
+import sealingTape from "@/assets/Sealing Tape.jpg";
 import { Plus, Search, Trash2, Edit2, Check, X } from "lucide-react";
 
 export const Route = createFileRoute("/inventory/stock")({
@@ -14,6 +21,21 @@ export const Route = createFileRoute("/inventory/stock")({
 const CATS = ["All", "Cardboard", "Plastic", "Supplies"];
 
 const EMPTY_FORM = { name: "", cat: "Cardboard", qty: "", unit: "pcs", min: "" };
+
+const ITEM_IMAGES = [
+  { match: /blister/i, src: blisterCard },
+  { match: /cardboard boxes?/i, src: cardboardBoxes },
+  { match: /cardboard sheets?/i, src: cardboardSheets },
+  { match: /hot glue/i, src: hotGlueSticks },
+  { match: /plastic sleeves?/i, src: plasticSleeves },
+  { match: /printed labels?/i, src: printedLabels },
+  { match: /sealing tape/i, src: sealingTape },
+];
+
+const itemImage = (name) => {
+  const item = ITEM_IMAGES.find((i) => i.match.test(name));
+  return item ? item.src : null;
+};
 
 function Page() {
   const [items, setItems]         = useState(() => stockStore.getAll());
@@ -180,7 +202,21 @@ function Page() {
             <tbody>
               {filtered.map((item) => (
                 <tr key={item.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/30 transition">
-                  <td className="px-4 sm:px-6 py-3 font-medium">{item.name}</td>
+                  <td className="px-4 sm:px-6 py-3 font-medium">
+                    <div className="flex items-center gap-3">
+                      {itemImage(item.name) && (
+                        <img
+                          src={itemImage(item.name)}
+                          alt={item.name}
+                          className="h-12 w-12 rounded-lg object-cover border border-border"
+                        />
+                      )}
+                      <div>
+                        {item.name}
+                        <div className="text-xs text-muted-foreground">{item.unit}</div>
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 sm:px-6 py-3 text-muted-foreground">{item.cat}</td>
                   <td className="px-4 sm:px-6 py-3">
                     {editingId === item.id ? (
