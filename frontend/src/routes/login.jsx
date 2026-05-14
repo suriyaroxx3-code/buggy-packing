@@ -37,6 +37,13 @@ const inputStyle = {
 function LoginPage() {
   const navigate = useNavigate();
 
+  /* If a session already exists, go straight to the dashboard */
+  useEffect(() => {
+    if (sessionStore.get()) {
+      navigate({ to: "/" });
+    }
+  }, []);
+
   /* slideshow */
   const [idx,    setIdx]    = useState(0);
   const [fading, setFading] = useState(false);

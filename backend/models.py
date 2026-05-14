@@ -61,6 +61,9 @@ class BatchBase(BaseModel):
     product: str
     input: int
     output: int
+    dispatchStatus: str = "Pending"
+    date: str = ""
+    statusUpdatedAt: str = ""
 
 
 class BatchCreate(BatchBase):
@@ -69,6 +72,20 @@ class BatchCreate(BatchBase):
 
 class Batch(BatchBase):
     id: str
+
+    @classmethod
+    def from_db(cls, row: dict) -> "Batch":
+        """Map SQLite snake_case columns → camelCase model fields."""
+        return cls(
+            id=row["id"],
+            batch=row["batch"],
+            product=row["product"],
+            input=row["input"],
+            output=row["output"],
+            dispatchStatus=row.get("dispatch_status", "Pending"),
+            date=row.get("date", ""),
+            statusUpdatedAt=row.get("status_updated", ""),
+        )
 
 
 # ── Billing / Quotation ───────────────────────────────────────────────────────

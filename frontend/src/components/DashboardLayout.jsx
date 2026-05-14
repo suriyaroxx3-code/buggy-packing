@@ -79,6 +79,14 @@ function saveProfile(p) {
 export function DashboardLayout({ children, title, subtitle, lowStockItems = [] }) {
   const location  = useLocation();
   const navigate  = useNavigate();
+
+  // ── Auth guard: redirect to /login if no active session ──────────────────
+  useEffect(() => {
+    if (!sessionStore.get()) {
+      navigate({ to: "/login" });
+    }
+  }, []);
+
   const [open, setOpen]                   = useState(false);
   const [notificationOpen, setNotiOpen]   = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -247,7 +255,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
         {/* Sign out */}
         <div className="p-3 shrink-0" style={{ borderTop: `1px solid ${C.sidebarBorder}` }}>
           <button
-            onClick={() => navigate({ to: "/login" })}
+            onClick={() => { sessionStore.clear(); navigate({ to: "/login" }); }}
             className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors"
             style={{ color: C.sidebarMuted }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = C.hoverItem; e.currentTarget.style.color = C.sidebarText; }}
