@@ -5,14 +5,16 @@
  */
 
 // ── Storage keys ───────────────────────────────────────────────
+// Version prefix bumped to "bp3_" — all old "bp2_" data is abandoned and
+// the app starts completely fresh on next load.
 const K = {
-  contractors: "bp_contractors",
-  workers:     "bp_workers",
-  stock:       "bp_stock",
-  batches:     "bp_batches",
-  billing:     "bp_billing",
-  deadlines:   "bp_deadlines",
-  users:       "bp_users",
+  contractors: "bp3_contractors",
+  workers:     "bp3_workers",
+  stock:       "bp3_stock",
+  batches:     "bp3_batches",
+  billing:     "bp3_billing",
+  deadlines:   "bp3_deadlines",
+  users:       "bp3_users",
 };
 
 // ── Seed data — all empty so only real manually-entered data is stored ─────
@@ -287,7 +289,7 @@ export const userStore = {
   },
 
   /** Create a new user. Throws "username_taken" if duplicate. */
-  add(username, password, role = "Staff") {
+  add(username, password, role = "Operations Manager") {
     const list = this.getAll();
     if (list.some((u) => u.username.trim().toLowerCase() === username.trim().toLowerCase())) {
       throw new Error("username_taken");
@@ -314,7 +316,7 @@ export const userStore = {
 };
 
 // ── Session helpers ─────────────────────────────────────────────
-const SESSION_KEY = "bp_session";
+const SESSION_KEY = "bp3_session";
 export const sessionStore = {
   get() {
     if (!isBrowser) return null;

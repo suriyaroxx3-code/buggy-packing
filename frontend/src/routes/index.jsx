@@ -1,8 +1,8 @@
-// index.jsx — Dashboard (converted from TSX to JSX)
+// index.jsx — Dashboard
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { billingStore } from "@/lib/store";
+import { billingStore, workerStore, batchStore, stockStore } from "@/lib/store";
 import {
   PackageCheck, Activity, LineChart, UserCog, Users,
   ReceiptText, FileText, Boxes, AlertTriangle, ArrowUpRight, TrendingUp,
@@ -39,8 +39,8 @@ const modules = [
     desc: "Contractors and daily workers",
     accent: "bg-warm",
     items: [
-      { to: "/contractor/salary", label: "Contractor Salary",  icon: UserCog },
-      { to: "/contractor/daily",  label: "Daily Workers Salary", icon: Users  },
+      { to: "/contractor/salary", label: "Contractor Salary",    icon: UserCog },
+      { to: "/contractor/daily",  label: "Daily Workers Salary", icon: Users   },
     ],
   },
   {
@@ -57,48 +57,119 @@ const modules = [
     desc: "Cardboard, plastic & supplies",
     accent: "bg-warm",
     items: [
-      { to: "/inventory/stock",  label: "Stock",            icon: Boxes        },
+      { to: "/inventory/stock",  label: "Stock",            icon: Boxes         },
       { to: "/inventory/alerts", label: "Low Stock Alerts", icon: AlertTriangle },
     ],
   },
 ];
 
-const trend = [
-  { d: "Mon", v: 8200  },
-  { d: "Tue", v: 9450  },
-  { d: "Wed", v: 8800  },
-  { d: "Thu", v: 10200 },
-  { d: "Fri", v: 11100 },
-  { d: "Sat", v: 9700  },
-  { d: "Sun", v: 5200  },
-];
+/* ── Build weekly chart from real batch entries (last 7 days) ── */
+function buildWeeklyTrend() {
+  const batches = batchStore.getAll();
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const result = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const dayLabel = days[d.getDay()];
+    const total = batches
+      .filter((b) => b.date === dateStr)
+      .reduce((sum, b) => sum + (Number(b.output) || 0), 0);
+    result.push({ d: dayLabel, v: total });
+  }
+  return result;
+}
 
-function Dashboard() {
+/* ── Compute real-time KPI values from store data ── */
+function computeKPIs() {
+  const TODAY = new Date().toISOString().slice(0, 10);
+
+  const batches = batchStore.getAll();
+  const unitsPackedToday = batches
+    .filter((b) => b.date === TODAY)
+    .reduce((sum, b) => sum + (Number(b.output) || 0), 0);
+
+  const workers = workerStore.getAll();
+  const presentCount = workers.filter((w) => w.present).length;
+  const totalWorkers = workers.length;
+
   const bills = billingStore.getAll();
   const pendingBills = bills.filter((b) => b.status === "Pending");
   const pendingBillValue = pendingBills.reduce((sum, b) => sum + (Number(b.value) || 0), 0);
 
-  // Charts use ResizeObserver which only exists in the browser — never render on server
+  const lowStockItems = stockStore.getLowStock();
+
+  return {
+    unitsPackedToday,
+    presentCount,
+    totalWorkers,
+    pendingBills,
+    pendingBillValue,
+    lowStockCount: lowStockItems.length,
+    lowStockItems,
+  };
+}
+
+function Dashboard() {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const [kpis,   setKpis]    = useState(() => computeKPIs());
+  const [trend,  setTrend]   = useState(() => buildWeeklyTrend());
+
+  const refreshAll = useCallback(() => {
+    setKpis(computeKPIs());
+    setTrend(buildWeeklyTrend());
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
+    const interval = setInterval(refreshAll, 10_000);
+    const onStorage = (e) => {
+      const keys = ["bp3_batches", "bp3_workers", "bp3_billing", "bp3_stock"];
+      if (!e.key || keys.includes(e.key)) refreshAll();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => { clearInterval(interval); window.removeEventListener("storage", onStorage); };
+  }, [refreshAll]);
+
+  const {
+    unitsPackedToday, presentCount, totalWorkers,
+    pendingBills, pendingBillValue, lowStockCount, lowStockItems,
+  } = kpis;
 
   return (
     <DashboardLayout
       title="Good morning, Manager"
       subtitle="Here's what's moving through the packing floor today."
+      lowStockItems={lowStockItems}
     >
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {[
-          { label: "Units Packed Today", value: "11,100", trend: "+9.2%",         tone: "text-emerald-600" },
-          { label: "Workers Present",    value: "92 / 96", trend: "+4 vs yesterday", tone: "text-emerald-600" },
+          {
+            label: "Units Packed Today",
+            value: unitsPackedToday.toLocaleString("en-IN"),
+            trend: unitsPackedToday > 0 ? "Live data" : "No entries today",
+            tone:  unitsPackedToday > 0 ? "text-emerald-600" : "text-muted-foreground",
+          },
+          {
+            label: "Workers Present",
+            value: totalWorkers > 0 ? `${presentCount} / ${totalWorkers}` : "—",
+            trend: presentCount > 0 ? `${presentCount} present` : "Mark attendance",
+            tone:  presentCount > 0 ? "text-emerald-600" : "text-muted-foreground",
+          },
           {
             label: "Pending Bills",
-            value: `${pendingBillValue.toLocaleString("en-IN")}`,
-            trend: `${pendingBills.length} invoices`,
-            tone: "text-muted-foreground",
+            value: `₹${pendingBillValue.toLocaleString("en-IN")}`,
+            trend: `${pendingBills.length} invoice${pendingBills.length !== 1 ? "s" : ""}`,
+            tone:  pendingBills.length > 0 ? "text-orange-500" : "text-muted-foreground",
           },
-          { label: "Low Stock Items",    value: "4",        trend: "Reorder soon",  tone: "text-accent" },
+          {
+            label: "Low Stock Items",
+            value: String(lowStockCount),
+            trend: lowStockCount > 0 ? "Reorder soon" : "Stock OK",
+            tone:  lowStockCount > 0 ? "text-accent" : "text-emerald-600",
+          },
         ].map((k, i) => (
           <div
             key={k.label}
@@ -159,11 +230,13 @@ function Dashboard() {
 
       {/* ── Chart + Activity ── */}
       <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
+
+        {/* Weekly chart */}
         <div className="lg:col-span-2 rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-soft hover-lift">
           <div className="flex items-start justify-between mb-3 gap-2">
             <div>
               <h3 className="font-display text-base sm:text-lg">Weekly Packing Output</h3>
-              <p className="text-xs text-muted-foreground">Brush tip units packed</p>
+              <p className="text-xs text-muted-foreground">Units packed per day — updates as you log dispatches</p>
             </div>
             <Link to="/production/weekly-report" className="text-xs text-primary hover:underline flex items-center gap-1 shrink-0">
               View report <ArrowUpRight className="h-3.5 w-3.5" />
@@ -179,11 +252,11 @@ function Dashboard() {
                       <stop offset="100%" stopColor="#6b5ca5" stopOpacity={0}   />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke="#ffffff" strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="d" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                   <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid oklch(0.92 0.012 260)", fontSize: 12 }} />
-                  <Area type="monotone" dataKey="v" stroke="#6b5ca5" strokeWidth={2.5} fill="url(#g1)" animationDuration={1200} />
+                  <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
+                  <Area type="monotone" dataKey="v" stroke="#6b5ca5" strokeWidth={2.5} fill="url(#g1)" animationDuration={800} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -192,27 +265,19 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* Recent Activity — empty until real data is entered */}
         <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-soft hover-lift">
           <h3 className="font-display text-base sm:text-lg mb-4">Recent Activity</h3>
-          <ul className="space-y-3 sm:space-y-4">
-            {[
-              ["Order PK-2381 — 2,400 units packed",       "12 min ago", "bg-primary"    ],
-              ["Salary processed for 22 daily workers",    "1 hr ago",   "bg-accent"     ],
-              ["Quotation Q-104 sent to BrightBrush Co.",  "3 hr ago",   "bg-primary"    ],
-              ["Cardboard sleeves — running low",          "Today",      "bg-destructive"],
-            ].map(([t, w, c], i) => (
-              <li key={t} style={{ animationDelay: `${i * 90}ms` }} className="animate-fade-in flex gap-3">
-                <span className={`mt-1.5 h-2 w-2 rounded-full ${c} animate-pulse shrink-0`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-foreground leading-tight">{t}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{w}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="flex flex-col items-center justify-center h-28 text-center gap-2">
+            <div className="h-9 w-9 rounded-full bg-secondary grid place-items-center">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">No activity yet.</p>
+            <p className="text-xs text-muted-foreground">Activity will appear as you enter data.</p>
+          </div>
         </div>
+
       </div>
     </DashboardLayout>
   );
 }
-

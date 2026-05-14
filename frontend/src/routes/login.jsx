@@ -1,8 +1,28 @@
 // login.jsx — Sign-in + Create User with warehouse slideshow background
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Eye, EyeOff, Loader2, Package, UserPlus, LogIn } from "lucide-react";
+import { Eye, EyeOff, Loader2, UserPlus, LogIn } from "lucide-react";
 import { userStore, sessionStore } from "@/lib/store";
+
+/* ── Custom BrushPack box logo (replaces Lovable / Package icon) ── */
+function BrushPackLogo({ size = 56 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100" height="100" rx="22" fill="#000000" />
+      {/* top face */}
+      <polygon points="50,16 80,32 50,48 20,32" fill="white" />
+      {/* left face */}
+      <polygon points="20,32 20,68 50,84 50,48" fill="rgba(255,255,255,0.55)" />
+      {/* right face */}
+      <polygon points="80,32 80,68 50,84 50,48" fill="rgba(255,255,255,0.78)" />
+      {/* center seam - top face divider */}
+      <line x1="50" y1="16" x2="50" y2="48" stroke="rgba(0,0,0,0.15)" strokeWidth="1.5" />
+      {/* flap lines on top */}
+      <line x1="20" y1="32" x2="50" y2="48" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
+      <line x1="80" y1="32" x2="50" y2="48" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
+    </svg>
+  );
+}
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -69,7 +89,7 @@ function LoginPage() {
   const [cuUser,  setCuUser]   = useState("");
   const [cuPass,  setCuPass]   = useState("");
   const [cuConf,  setCuConf]   = useState("");
-  const [cuRole,  setCuRole]   = useState("Staff");
+  const [cuRole,  setCuRole]   = useState("Operations Manager");
   const [cuShowP, setCuShowP]  = useState(false);
   const [cuShowC, setCuShowC]  = useState(false);
   const [cuError, setCuError]  = useState("");
@@ -111,7 +131,7 @@ function LoginPage() {
       try {
         userStore.add(cuUser.trim(), cuPass, cuRole);
         setCuOk(`User "${cuUser.trim()}" created! You can now sign in.`);
-        setCuUser(""); setCuPass(""); setCuConf(""); setCuRole("Staff");
+        setCuUser(""); setCuPass(""); setCuConf(""); setCuRole("Operations Manager");
         setCuLoading(false);
       } catch (err) {
         setCuLoading(false);
@@ -177,8 +197,8 @@ function LoginPage() {
 
           {/* Brand */}
           <div className="flex flex-col items-center text-center mb-6">
-            <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl grid place-items-center animate-float" style={{ backgroundColor: "#000000" }}>
-              <Package className="h-7 w-7 sm:h-8 sm:w-8 text-white" strokeWidth={2.2} />
+            <div className="animate-float">
+              <BrushPackLogo size={60} />
             </div>
             <h1 className="mt-4 font-display text-2xl sm:text-3xl tracking-tight" style={{ color: "#000000" }}>BrushPack</h1>
             <p className="text-sm mt-1" style={{ color: "#000000" }}>Packaging Operations Portal</p>
@@ -284,7 +304,7 @@ function LoginPage() {
                   onFocus={(e) => (e.target.style.borderColor = "#000000")}
                   onBlur={(e)  => (e.target.style.borderColor = "#000000")}
                 >
-                  {["Operations Manager","Supervisor","Packer","QC Inspector","Loader","Staff"].map((r) => (
+                  {["Operations Manager","Supervisor","Packer","QC Inspector","Loader"].map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>

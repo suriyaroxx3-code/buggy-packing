@@ -1,14 +1,15 @@
-// DashboardLayout.jsx — main shell with new teal + dark-slate colour scheme
+// DashboardLayout.jsx — main shell with teal + dark-slate colour scheme
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard, PackageCheck, Activity, LineChart,
   Users, UserCog, FileText, ReceiptText, Boxes,
   AlertTriangle, LogOut, Menu, X, Search, Bell,
-  ChevronDown, Package, AlertCircle, CalendarClock,
-  User, Settings, KeyRound, ChevronRight, Check, ShieldCheck,
+  ChevronDown, Package, Settings, AlertCircle, CalendarClock,
+  User, KeyRound, ChevronRight, Check, ShieldCheck,
 } from "lucide-react";
 import { userStore, sessionStore } from "@/lib/store";
+
 
 const groups = [
   { title: "Overview", items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard }] },
@@ -62,7 +63,7 @@ const C = {
 const isBrowser = typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
 /* ── Profile stored in localStorage ── */
-const PROFILE_KEY = "bp_profile";
+const PROFILE_KEY = "bp3_profile";
 function loadProfile() {
   if (!isBrowser) return { name: "Manager", role: "Operations Manager", email: "manager@brushpack.com" };
   try {
@@ -112,7 +113,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
 
   useEffect(() => {
     if (!isBrowser) return;
-    const stored = localStorage.getItem("lowStockNotifications");
+    const stored = localStorage.getItem("bp3_lowStockNotif");
     if (stored) {
       try { setNotifications(JSON.parse(stored)); } catch { setNotifications([]); }
     }
@@ -127,7 +128,7 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
         timestamp: new Date().toLocaleTimeString(),
       }));
       setNotifications(n);
-      localStorage.setItem("lowStockNotifications", JSON.stringify(n));
+      localStorage.setItem("bp3_lowStockNotif", JSON.stringify(n));
     }
   }, [lowStockItems]);
 
@@ -136,12 +137,12 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
   const clearNotif = (id) => {
     const u = notifications.filter((n) => n.id !== id);
     setNotifications(u);
-    if (isBrowser) localStorage.setItem("lowStockNotifications", JSON.stringify(u));
+    if (isBrowser) localStorage.setItem("bp3_lowStockNotif", JSON.stringify(u));
   };
 
   const clearAll = () => {
     setNotifications([]);
-    if (isBrowser) localStorage.removeItem("lowStockNotifications");
+    if (isBrowser) localStorage.removeItem("bp3_lowStockNotif");
   };
 
   return (

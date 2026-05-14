@@ -523,5 +523,21 @@ def delete_deadline(did: str) -> bool:
     return cur.rowcount > 0
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# RESET — delete all operational data (keep users)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def clear_all_data() -> dict:
+    """Delete every row from all operational tables. Users table is preserved."""
+    tables = ["batches", "billing_records", "contractors", "deadlines", "stock_items", "workers"]
+    counts = {}
+    with _connect() as conn:
+        for table in tables:
+            cur = conn.execute(f"DELETE FROM {table}")
+            counts[table] = cur.rowcount
+        conn.commit()
+    return counts
+
+
 # ── Initialise on import ──────────────────────────────────────────────────────
 init_db()

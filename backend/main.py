@@ -367,6 +367,20 @@ def list_users():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ADMIN — DATA RESET
+# ═══════════════════════════════════════════════════════════════════════════════
+@app.post("/api/admin/reset", tags=["Admin"])
+def reset_all_data():
+    """
+    Delete every row from all operational tables (batches, billing, contractors,
+    deadlines, stock, workers).  Users / auth data is preserved.
+    Call this once to start with a completely clean slate.
+    """
+    counts = db.clear_all_data()
+    return {"ok": True, "deleted": counts, "message": "All operational data cleared. Users preserved."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════════════════════
 @app.get("/health", tags=["Health"])

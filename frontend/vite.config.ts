@@ -46,7 +46,8 @@ function bypassSsr() {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BrushPack</title>
+    <title>BrushPack — Packaging Operations</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23000000'/%3E%3Cpolygon points='50,16 80,32 50,48 20,32' fill='white'/%3E%3Cpolygon points='20,32 20,68 50,84 50,48' fill='rgba(255,255,255,0.55)'/%3E%3Cpolygon points='80,32 80,68 50,84 50,48' fill='rgba(255,255,255,0.78)'/%3E%3C/svg%3E" />
   </head>
   <body>
     <div id="root"></div>
