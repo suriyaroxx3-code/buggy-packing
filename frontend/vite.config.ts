@@ -70,6 +70,13 @@ export default defineConfig({
   vite: {
     plugins: [bypassSsr()],
     server: {
+      // Forward /api/* requests to the FastAPI backend running on port 8000
+      proxy: {
+        "/api": {
+          target: "http://localhost:8000",
+          changeOrigin: true,
+        },
+      },
       // Prevent the TanStack Router plugin from triggering full reloads
       // when routeTree.gen.ts is auto-regenerated.
       watch: {

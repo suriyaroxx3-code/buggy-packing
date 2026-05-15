@@ -4,7 +4,7 @@
  * This replaces the localStorage-only store.js for persistent server-side storage.
  */
 
-const BASE = "http://localhost:8000/api";
+const BASE = "/api";
 
 async function req(method, path, body) {
   const opts = { method, headers: {} };

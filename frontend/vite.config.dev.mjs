@@ -16,5 +16,15 @@ export default defineConfig({
     dedupe: ["react","react-dom","react/jsx-runtime","react/jsx-dev-runtime",
              "@tanstack/react-query","@tanstack/query-core"],
   },
-  server: { port: 5173, host: "0.0.0.0", strictPort: false },
+  server: {
+    port: 5173,
+    host: "0.0.0.0",
+    strictPort: false,
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
+  },
 });
