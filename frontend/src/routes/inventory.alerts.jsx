@@ -1,9 +1,9 @@
-// inventory.alerts.jsx — Low Stock Alerts, fully static localStorage-backed
+// inventory.alerts.jsx — Low Stock Alerts, backend API backed (SQLite persistent)
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Btn } from "@/components/PageHelpers";
-import { stockStore } from "@/lib/store";
+import { stockApi } from "@/lib/api";
 import { AlertTriangle, ShoppingCart, RefreshCw, CheckCircle } from "lucide-react";
 
 export const Route = createFileRoute("/inventory/alerts")({
@@ -24,31 +24,40 @@ function enrich(item) {
 }
 
 function Page() {
-  const [alerts, setAlerts]       = useState(() => stockStore.getLowStock().map(enrich));
+  const [alerts, setAlerts]       = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [reordered, setReordered] = useState([]);
   const [toast, setToast]         = useState("");
 
+  useEffect(() => {
+    stockApi.getAll()
+      .then((items) => setAlerts(items.filter((i) => i.qty < i.min).map(enrich)))
+      .catch(() => setAlerts([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
 
-  /* Refresh reads latest from store */
-  const refresh = () => {
-    setAlerts(stockStore.getLowStock().map(enrich));
-    setReordered([]);
-    showToast("✓ Alerts refreshed.");
+  const markReordered = (id) => {
+    setReordered((p) => [...p, id]);
+    showToast("✓ Marked as reordered.");
   };
 
-  /* Reorder — marks item as ordered (UI only; in a real app this would place an order) */
-  const handleReorder = (id, name) => {
-    if (reordered.includes(id)) return;
-    setReordered((prev) => [...prev, id]);
-    showToast(`✓ Reorder placed for "${name}".`);
+  const refresh = () => {
+    setLoading(true);
+    stockApi.getAll()
+      .then((items) => setAlerts(items.filter((i) => i.qty < i.min).map(enrich)))
+      .catch(() => setAlerts([]))
+      .finally(() => setLoading(false));
   };
+
+  const pending   = alerts.filter((a) => !reordered.includes(a.id));
+  const done      = alerts.filter((a) =>  reordered.includes(a.id));
 
   return (
     <DashboardLayout
       title="Low Stock Alerts"
-      subtitle="Packaging materials below minimum threshold — reorder soon."
-      lowStockItems={alerts}
+      subtitle="Items that have fallen below minimum threshold and require reordering."
     >
       {/* Toast */}
       {toast && (
@@ -57,96 +66,71 @@ function Page() {
         </div>
       )}
 
-      {/* Banner */}
-      <div className="rounded-2xl bg-warm/15 border border-accent/30 p-4 sm:p-5 mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 hover-lift">
-        <div className="h-10 w-10 rounded-full bg-accent grid place-items-center text-accent-foreground shrink-0 animate-float">
-          <AlertTriangle className="h-5 w-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-foreground">
-            {alerts.length === 0 ? "All stock levels are healthy." : `${alerts.length} item${alerts.length > 1 ? "s" : ""} need attention`}
+      {loading ? (
+        <div className="px-6 py-8 text-center text-muted-foreground text-sm">Loading…</div>
+      ) : alerts.length === 0 ? (
+        <div className="rounded-2xl bg-card border border-border p-10 text-center">
+          <CheckCircle className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+          <p className="font-medium text-foreground">All stock levels are OK</p>
+          <p className="text-sm text-muted-foreground mt-1">No items are below their minimum threshold.</p>
+          <div className="mt-4">
+            <Link to="/inventory/stock">
+              <Btn variant="ghost">View Inventory</Btn>
+            </Link>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {alerts.length > 0 ? "Reorder these to avoid packing line halts." : "No items are currently below the minimum threshold."}
-          </p>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={refresh}
-            className="text-muted-foreground hover:text-foreground transition"
-            title="Refresh alerts"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-          <Link to="/inventory/stock" className="text-sm text-primary hover:underline whitespace-nowrap">
-            View all stock →
-          </Link>
-        </div>
-      </div>
-
-      <Section title="Items below minimum">
-        {alerts.length === 0 ? (
-          <div className="py-8 text-center">
-            <CheckCircle className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">All stock levels are healthy. No reorders needed.</p>
-            <div className="mt-4">
-              <Link to="/inventory/stock">
-                <Btn variant="ghost">View Inventory</Btn>
-              </Link>
-            </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-semibold text-destructive">{pending.length}</span> item{pending.length !== 1 ? "s" : ""} need reordering
+            </p>
+            <Btn variant="ghost" onClick={refresh}>
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Btn>
           </div>
-        ) : (
-          <ul className="divide-y divide-border">
-            {alerts.map((a, i) => {
-              const deficit   = a.min - a.qty;
-              const pct       = Math.round((a.qty / a.min) * 100);
-              const ordered   = reordered.includes(a.id);
 
-              return (
-                <li
-                  key={a.id ?? a.name}
-                  style={{ animationDelay: `${i * 80}ms` }}
-                  className="animate-fade-in py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4"
-                >
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{a.name}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      Supplier: {a.supplier} · ETA {a.eta}
+          {/* Pending alerts */}
+          {pending.length > 0 && (
+            <Section title="Action Required">
+              <div className="space-y-3">
+                {pending.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between gap-4 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                      <div>
+                        <div className="font-medium">{a.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {a.qty} {a.unit} remaining · Min: {a.min} {a.unit} · Supplier: {a.supplier} · ETA: {a.eta}
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-1.5 h-1.5 w-full max-w-[200px] rounded-full bg-border overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-destructive transition-all"
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="text-sm whitespace-nowrap">
-                    <span className="text-destructive font-medium">{a.qty.toLocaleString()} {a.unit}</span>
-                    <span className="text-muted-foreground"> / {a.min.toLocaleString()} min</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground whitespace-nowrap">
-                    Short by {deficit.toLocaleString()} {a.unit}
-                  </div>
-
-                  {/* Reorder button */}
-                  {ordered ? (
-                    <div className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium whitespace-nowrap">
-                      <CheckCircle className="h-4 w-4" /> Ordered
-                    </div>
-                  ) : (
-                    <Btn variant="accent" onClick={() => handleReorder(a.id ?? a.name, a.name)}>
-                      <ShoppingCart className="h-4 w-4" /> Reorder
+                    <Btn variant="ghost" onClick={() => markReordered(a.id)}>
+                      <ShoppingCart className="h-4 w-4" /> Mark Reordered
                     </Btn>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Section>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Done */}
+          {done.length > 0 && (
+            <div className="mt-4">
+              <Section title="Reordered">
+                <div className="space-y-2">
+                  {done.map((a) => (
+                    <div key={a.id} className="flex items-center gap-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-muted-foreground">
+                      <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
+                      <span className="text-sm">{a.name} — reorder placed</span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </div>
+          )}
+        </>
+      )}
     </DashboardLayout>
   );
 }

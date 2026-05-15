@@ -1,8 +1,8 @@
-// index.jsx — Dashboard
+// index.jsx — Dashboard, backend API backed (SQLite persistent)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { billingStore, workerStore, batchStore, stockStore } from "@/lib/store";
+import { batchApi, workerApi, billingApi, stockApi } from "@/lib/api";
 import {
   PackageCheck, Activity, LineChart, UserCog, Users,
   ReceiptText, FileText, Boxes, AlertTriangle, ArrowUpRight, TrendingUp,
@@ -63,9 +63,7 @@ const modules = [
   },
 ];
 
-/* ── Build weekly chart from real batch entries (last 7 days) ── */
-function buildWeeklyTrend() {
-  const batches = batchStore.getAll();
+function buildWeeklyTrend(batches) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const result = [];
   for (let i = 6; i >= 0; i--) {
@@ -81,61 +79,51 @@ function buildWeeklyTrend() {
   return result;
 }
 
-/* ── Compute real-time KPI values from store data ── */
-function computeKPIs() {
+function computeKPIs(batches, workers, bills, stock) {
   const TODAY = new Date().toISOString().slice(0, 10);
-
-  const batches = batchStore.getAll();
   const unitsPackedToday = batches
     .filter((b) => b.date === TODAY)
     .reduce((sum, b) => sum + (Number(b.output) || 0), 0);
-
-  const workers = workerStore.getAll();
-  const presentCount = workers.filter((w) => w.present).length;
-  const totalWorkers = workers.length;
-
-  const bills = billingStore.getAll();
-  const pendingBills = bills.filter((b) => b.status === "Pending");
+  const presentCount  = workers.filter((w) => w.present).length;
+  const totalWorkers  = workers.length;
+  const pendingBills  = bills.filter((b) => b.status === "Pending");
   const pendingBillValue = pendingBills.reduce((sum, b) => sum + (Number(b.value) || 0), 0);
-
-  const lowStockItems = stockStore.getLowStock();
-
-  return {
-    unitsPackedToday,
-    presentCount,
-    totalWorkers,
-    pendingBills,
-    pendingBillValue,
-    lowStockCount: lowStockItems.length,
-    lowStockItems,
-  };
+  const lowStockItems = stock.filter((s) => s.qty < s.min);
+  return { unitsPackedToday, presentCount, totalWorkers, pendingBills, pendingBillValue, lowStockItems };
 }
 
 function Dashboard() {
   const [mounted, setMounted] = useState(false);
-  const [kpis,   setKpis]    = useState(() => computeKPIs());
-  const [trend,  setTrend]   = useState(() => buildWeeklyTrend());
+  const [kpis,   setKpis]    = useState({ unitsPackedToday: 0, presentCount: 0, totalWorkers: 0, pendingBills: [], pendingBillValue: 0, lowStockItems: [] });
+  const [trend,  setTrend]   = useState([]);
 
-  const refreshAll = useCallback(() => {
-    setKpis(computeKPIs());
-    setTrend(buildWeeklyTrend());
+  const refreshAll = useCallback(async () => {
+    try {
+      const [batches, workers, bills, stock] = await Promise.all([
+        batchApi.getAll(),
+        workerApi.getAll(),
+        billingApi.getAll(),
+        stockApi.getAll(),
+      ]);
+      setKpis(computeKPIs(batches, workers, bills, stock));
+      setTrend(buildWeeklyTrend(batches));
+    } catch {
+      // silently fail — backend may not be running
+    }
   }, []);
 
   useEffect(() => {
     setMounted(true);
-    const interval = setInterval(refreshAll, 10_000);
-    const onStorage = (e) => {
-      const keys = ["bp3_batches", "bp3_workers", "bp3_billing", "bp3_stock"];
-      if (!e.key || keys.includes(e.key)) refreshAll();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => { clearInterval(interval); window.removeEventListener("storage", onStorage); };
+    refreshAll();
+    const interval = setInterval(refreshAll, 30_000);
+    return () => clearInterval(interval);
   }, [refreshAll]);
 
   const {
     unitsPackedToday, presentCount, totalWorkers,
-    pendingBills, pendingBillValue, lowStockCount, lowStockItems,
+    pendingBills, pendingBillValue, lowStockItems,
   } = kpis;
+  const lowStockCount = lowStockItems.length;
 
   return (
     <DashboardLayout
@@ -230,7 +218,6 @@ function Dashboard() {
 
       {/* ── Chart + Activity ── */}
       <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
-
         {/* Weekly chart */}
         <div className="lg:col-span-2 rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-soft hover-lift">
           <div className="flex items-start justify-between mb-3 gap-2">
@@ -265,7 +252,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Recent Activity — empty until real data is entered */}
+        {/* Recent Activity */}
         <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-soft hover-lift">
           <h3 className="font-display text-base sm:text-lg mb-4">Recent Activity</h3>
           <div className="flex flex-col items-center justify-center h-28 text-center gap-2">
@@ -276,7 +263,6 @@ function Dashboard() {
             <p className="text-xs text-muted-foreground">Activity will appear as you enter data.</p>
           </div>
         </div>
-
       </div>
     </DashboardLayout>
   );

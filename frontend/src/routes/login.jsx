@@ -2,7 +2,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Eye, EyeOff, Loader2, UserPlus, LogIn } from "lucide-react";
-import { userStore, sessionStore } from "@/lib/store";
+import { authApi, sessionStore } from "@/lib/api";
 
 /* ── Custom BrushPack box logo (replaces Lovable / Package icon) ── */
 function BrushPackLogo({ size = 56 }) {
@@ -99,26 +99,29 @@ function LoginPage() {
   const nextIdx = (idx + 1) % SLIDES.length;
 
   /* ── Sign In submit ── */
-  const submitSignIn = (e) => {
+  const submitSignIn = async (e) => {
     e.preventDefault();
     setSiError("");
     if (!siUser.trim()) { setSiError("Username is required."); return; }
     if (!siPass.trim()) { setSiError("Password is required."); return; }
     setSiLoading(true);
-    setTimeout(() => {
-      const user = userStore.authenticate(siUser, siPass);
-      if (!user) {
+    try {
+      const res = await authApi.login(siUser.trim(), siPass);
+      if (!res.ok) {
+        setSiError(res.message || "Incorrect username or password.");
         setSiLoading(false);
-        setSiError("Incorrect username or password.");
         return;
       }
-      sessionStore.set(user);
+      sessionStore.set(res.user);
       navigate({ to: "/" });
-    }, 500);
+    } catch {
+      setSiError("Cannot connect to server. Make sure the backend is running.");
+      setSiLoading(false);
+    }
   };
 
   /* ── Create User submit ── */
-  const submitCreate = (e) => {
+  const submitCreate = async (e) => {
     e.preventDefault();
     setCuError(""); setCuOk("");
     if (!cuUser.trim())  { setCuError("Username is required."); return; }
@@ -127,21 +130,19 @@ function LoginPage() {
     if (cuPass.length < 6) { setCuError("Password must be at least 6 characters."); return; }
     if (cuPass !== cuConf) { setCuError("Passwords do not match."); return; }
     setCuLoading(true);
-    setTimeout(() => {
-      try {
-        userStore.add(cuUser.trim(), cuPass, cuRole);
+    try {
+      const res = await authApi.register(cuUser.trim(), cuPass, cuRole);
+      if (!res.ok) {
+        setCuError(res.message || "Username already taken.");
+      } else {
         setCuOk(`User "${cuUser.trim()}" created! You can now sign in.`);
         setCuUser(""); setCuPass(""); setCuConf(""); setCuRole("Operations Manager");
-        setCuLoading(false);
-      } catch (err) {
-        setCuLoading(false);
-        if (err.message === "username_taken") {
-          setCuError("That username is already taken.");
-        } else {
-          setCuError("Something went wrong. Please try again.");
-        }
       }
-    }, 400);
+    } catch {
+      setCuError("Cannot connect to server. Make sure the backend is running.");
+    } finally {
+      setCuLoading(false);
+    }
   };
 
   /* ── Tab button ── */

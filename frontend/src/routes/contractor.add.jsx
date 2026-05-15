@@ -1,9 +1,9 @@
-// contractor.add.jsx — saves directly to localStorage store
+// contractor.add.jsx — saves to backend API (persistent SQLite storage)
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Field, inputCls, Btn } from "@/components/PageHelpers";
-import { contractorStore } from "@/lib/store";
+import { contractorApi } from "@/lib/api";
 
 export const Route = createFileRoute("/contractor/add")({
   component: Page,
@@ -17,22 +17,25 @@ function Page() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     if (!form.name.trim()) { setError("Contractor name is required."); return; }
     if (!form.area.trim()) { setError("Line / Area is required."); return; }
     setSaving(true);
-
-    contractorStore.add({
-      name:    form.name.trim(),
-      area:    form.area.trim(),
-      workers: Number(form.workers) || 0,
-      amount:  Number(form.amount)  || 0,
-      status:  "Pending",
-    });
-
-    navigate({ to: "/contractor/salary" });
+    try {
+      await contractorApi.create({
+        name:    form.name.trim(),
+        area:    form.area.trim(),
+        workers: Number(form.workers) || 0,
+        amount:  Number(form.amount)  || 0,
+        status:  "Pending",
+      });
+      navigate({ to: "/contractor/salary" });
+    } catch (err) {
+      setError(err.message || "Failed to save contractor. Is the backend running?");
+      setSaving(false);
+    }
   };
 
   return (

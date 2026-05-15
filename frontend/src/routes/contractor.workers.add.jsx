@@ -1,9 +1,9 @@
-// contractor.workers.add.jsx — saves to localStorage store, duplicate EMP ID check
+// contractor.workers.add.jsx — saves to backend API (persistent SQLite storage)
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Field, inputCls, Btn } from "@/components/PageHelpers";
-import { workerStore } from "@/lib/store";
+import { workerApi } from "@/lib/api";
 
 export const Route = createFileRoute("/contractor/workers/add")({
   component: Page,
@@ -19,7 +19,7 @@ function Page() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     if (!form.emp_id.trim()) { setError("Employee ID is required."); return; }
@@ -28,20 +28,20 @@ function Page() {
 
     setSaving(true);
     try {
-      workerStore.add({
-        emp_id: form.emp_id.trim().toUpperCase(),
-        name:   form.name.trim(),
-        role:   form.role,
-        rate:   Number(form.rate),
-        hours:  0,
+      await workerApi.create({
+        emp_id:  form.emp_id.trim().toUpperCase(),
+        name:    form.name.trim(),
+        role:    form.role,
+        rate:    Number(form.rate),
+        hours:   0,
         present: false,
       });
       navigate({ to: "/contractor/daily" });
     } catch (err) {
-      if (err.message === "duplicate_emp_id") {
+      if (err.message?.includes("already exists") || err.message?.includes("409")) {
         setError(`Employee ID "${form.emp_id.trim().toUpperCase()}" already exists. Use a different ID.`);
       } else {
-        setError("Something went wrong. Please try again.");
+        setError(err.message || "Something went wrong. Is the backend running?");
       }
       setSaving(false);
     }

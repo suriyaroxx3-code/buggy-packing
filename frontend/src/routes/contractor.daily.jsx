@@ -1,9 +1,10 @@
-// contractor.daily.jsx — Daily Workers Salary, fully static, localStorage-backed
+// contractor.daily.jsx — Daily Workers Salary, backend API backed (SQLite persistent)
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat, Field, inputCls, Btn, Pill } from "@/components/PageHelpers";
-import { workerStore, exportCSV } from "@/lib/store";
+import { workerApi } from "@/lib/api";
+import { exportCSV } from "@/lib/store";
 import { UserPlus, Download, Trash2, Search } from "lucide-react";
 
 export const Route = createFileRoute("/contractor/daily")({
@@ -14,10 +15,18 @@ export const Route = createFileRoute("/contractor/daily")({
 const EMPTY = { id: "", emp_id: "", name: "", role: "", hours: 8, rate: 0 };
 
 function Page() {
-  const [workers, setWorkers]       = useState(() => workerStore.getAll());
+  const [workers, setWorkers]       = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState("");
   const [quickEntry, setQuickEntry] = useState(EMPTY);
   const [toast, setToast]           = useState("");
+
+  useEffect(() => {
+    workerApi.getAll()
+      .then(setWorkers)
+      .catch(() => setWorkers([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -35,39 +44,69 @@ function Page() {
   };
 
   /* Mark Present and save */
-  const handleMarkPresent = () => {
+  const handleMarkPresent = async () => {
     if (!quickEntry.id) { alert("Please select an Employee ID first."); return; }
-    const updated = workerStore.update(quickEntry.id, {
-      hours:   Number(quickEntry.hours),
-      rate:    Number(quickEntry.rate),
-      present: true,
-    });
-    setWorkers(updated);
-    setQuickEntry(EMPTY);
-    showToast("✓ Attendance saved successfully.");
+    const worker = workers.find((w) => w.id === quickEntry.id);
+    if (!worker) return;
+    try {
+      const updated = await workerApi.update(quickEntry.id, {
+        ...worker,
+        hours:   Number(quickEntry.hours),
+        rate:    Number(quickEntry.rate),
+        present: true,
+      });
+      setWorkers((prev) => prev.map((w) => (w.id === quickEntry.id ? updated : w)));
+      setQuickEntry(EMPTY);
+      showToast("✓ Attendance saved successfully.");
+    } catch (err) {
+      alert("Failed to save: " + err.message);
+    }
   };
 
   /* Toggle present/absent from table row */
-  const togglePresent = (id, currentPresent) => {
-    const updated = workerStore.update(id, {
-      present: !currentPresent,
-      hours: !currentPresent ? 8 : 0,
-    });
-    setWorkers(updated);
-    showToast(!currentPresent ? "✓ Marked Present." : "✓ Marked Absent.");
+  const togglePresent = async (id, currentPresent) => {
+    const worker = workers.find((w) => w.id === id);
+    if (!worker) return;
+    try {
+      const updated = await workerApi.update(id, {
+        ...worker,
+        present: !currentPresent,
+        hours: !currentPresent ? 8 : 0,
+      });
+      setWorkers((prev) => prev.map((w) => (w.id === id ? updated : w)));
+      showToast(!currentPresent ? "✓ Marked Present." : "✓ Marked Absent.");
+    } catch (err) {
+      alert("Failed to update: " + err.message);
+    }
   };
 
   /* Edit hours directly in table */
-  const handleHoursChange = (id, hours) => {
-    const updated = workerStore.update(id, { hours: Math.max(0, Number(hours)) });
-    setWorkers(updated);
+  const handleHoursChange = async (id, hours) => {
+    const worker = workers.find((w) => w.id === id);
+    if (!worker) return;
+    const newHours = Math.max(0, Number(hours));
+    // Optimistic update
+    setWorkers((prev) => prev.map((w) => (w.id === id ? { ...w, hours: newHours } : w)));
+    try {
+      const updated = await workerApi.update(id, { ...worker, hours: newHours });
+      setWorkers((prev) => prev.map((w) => (w.id === id ? updated : w)));
+    } catch (err) {
+      // Revert optimistic update
+      setWorkers((prev) => prev.map((w) => (w.id === id ? worker : w)));
+      alert("Failed to update hours: " + err.message);
+    }
   };
 
   /* Delete worker */
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!confirm("Delete this worker record permanently?")) return;
-    setWorkers(workerStore.remove(id));
-    showToast("Worker removed.");
+    try {
+      await workerApi.delete(id);
+      setWorkers((prev) => prev.filter((w) => w.id !== id));
+      showToast("Worker removed.");
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
   };
 
   /* Export */
@@ -179,7 +218,12 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((w) => (
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">Loading…</td>
+                </tr>
+              )}
+              {!loading && filtered.map((w) => (
                 <tr key={w.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/30 transition">
                   <td className="px-4 sm:px-6 py-3 font-medium text-xs text-muted-foreground">{w.emp_id}</td>
                   <td className="px-4 sm:px-6 py-3 font-medium whitespace-nowrap">{w.name}</td>
@@ -220,7 +264,7 @@ function Page() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">
                     No workers found.

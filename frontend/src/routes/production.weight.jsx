@@ -1,9 +1,9 @@
-// production.weight.jsx — Dispatch Tracking, manual-entry only, localStorage-backed
+// production.weight.jsx — Dispatch Tracking, backend API backed (SQLite persistent)
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat, Field, inputCls, Btn, Pill } from "@/components/PageHelpers";
-import { batchStore, DISPATCH_STATUSES } from "@/lib/store";
+import { batchApi } from "@/lib/api";
 import { PackageCheck, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/production/weight")({
@@ -11,21 +11,29 @@ export const Route = createFileRoute("/production/weight")({
   component: Page,
 });
 
+const DISPATCH_STATUSES = ["Pending", "In Transit", "Dispatched", "Cancelled"];
 const EMPTY = { batchNo: "", product: "", input: "", output: "", dispatchStatus: "Pending" };
 
-// Pill tone per dispatch status
 function dispatchTone(s) {
   if (s === "Dispatched")  return "success";
   if (s === "In Transit")  return "info";
   if (s === "Cancelled")   return "danger";
-  return "warn"; // Pending
+  return "warn";
 }
 
 function Page() {
-  const [rows,   setRows]   = useState(() => batchStore.getAll());
+  const [rows,   setRows]   = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form,   setForm]   = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [toast,  setToast]  = useState("");
+
+  useEffect(() => {
+    batchApi.getAll()
+      .then(setRows)
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
 
@@ -38,7 +46,7 @@ function Page() {
   const totalPending  = totalReceived - totalPacked;
 
   // ── Save new batch entry ──────────────────────────────────────
-  const saveEntry = () => {
+  const saveEntry = async () => {
     if (!form.batchNo.trim()) { alert("Batch number is required."); return; }
     if (!form.product.trim()) { alert("Product / pack type is required."); return; }
     if (!form.input)          { alert("Tips Received is required."); return; }
@@ -46,29 +54,50 @@ function Page() {
     if (outN > inN)           { alert("Packed units cannot exceed received units."); return; }
 
     setSaving(true);
-    const entry = batchStore.add({
-      batch:          form.batchNo.trim(),
-      product:        form.product.trim(),
-      input:          inN,
-      output:         outN,
-      dispatchStatus: form.dispatchStatus,
-    });
-    setRows(batchStore.getAll());
-    setForm(EMPTY);
-    setSaving(false);
-    showToast(`Batch ${entry.batch} saved.`);
+    try {
+      const created = await batchApi.create({
+        batch:          form.batchNo.trim(),
+        product:        form.product.trim(),
+        input:          inN,
+        output:         outN,
+        dispatchStatus: form.dispatchStatus,
+      });
+      setRows((prev) => [created, ...prev]);
+      setForm(EMPTY);
+      showToast(`Batch ${created.batch} saved.`);
+    } catch (err) {
+      if (err.message?.includes("already exists") || err.message?.includes("409")) {
+        alert(`Batch number "${form.batchNo.trim()}" already exists.`);
+      } else {
+        alert("Failed to save: " + err.message);
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Inline status update ──────────────────────────────────────
-  const updateStatus = (id, newStatus) => {
-    setRows(batchStore.update(id, { dispatchStatus: newStatus }));
-    showToast(`Status updated to "${newStatus}".`);
+  const updateStatus = async (id, newStatus) => {
+    const batch = rows.find((r) => r.id === id);
+    if (!batch) return;
+    try {
+      const updated = await batchApi.update(id, { ...batch, dispatchStatus: newStatus });
+      setRows((prev) => prev.map((r) => (r.id === id ? updated : r)));
+      showToast(`Status updated to "${newStatus}".`);
+    } catch (err) {
+      alert("Failed to update status: " + err.message);
+    }
   };
 
-  const deleteRow = (id) => {
+  const deleteRow = async (id) => {
     if (!confirm("Delete this batch entry?")) return;
-    setRows(batchStore.remove(id));
-    showToast("Batch entry deleted.");
+    try {
+      await batchApi.delete(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      showToast("Batch entry deleted.");
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
   };
 
   const resetForm = () => setForm(EMPTY);
@@ -174,7 +203,12 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">Loading…</td>
+                </tr>
+              )}
+              {!loading && rows.map((r) => {
                 const rem = (r.input || 0) - (r.output || 0);
                 const ds  = r.dispatchStatus || "Pending";
                 return (
@@ -189,7 +223,6 @@ function Page() {
                     <td className="px-4 sm:px-6 py-3 whitespace-nowrap">{rem.toLocaleString()}</td>
                     <td className="px-4 sm:px-6 py-3">
                       <div className="flex flex-col gap-1.5">
-                        {/* Inline status update dropdown */}
                         <select
                           value={ds}
                           onChange={(e) => updateStatus(r.id, e.target.value)}
@@ -213,7 +246,7 @@ function Page() {
                   </tr>
                 );
               })}
-              {rows.length === 0 && (
+              {!loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-10 text-center text-muted-foreground text-sm">
                     No batches yet — add a real entry above.

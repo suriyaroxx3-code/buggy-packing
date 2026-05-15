@@ -1,10 +1,10 @@
-// production.deadline.jsx — Deadline Tracking
+// production.deadline.jsx — Deadline Tracking, backend API backed (SQLite persistent)
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat, Field, inputCls, Btn, Pill } from "@/components/PageHelpers";
-import { deadlineStore } from "@/lib/store";
-import { CalendarClock, Trash2, Pencil, X, Check } from "lucide-react";
+import { deadlineApi } from "@/lib/api";
+import { CalendarClock, Trash2, Pencil, X } from "lucide-react";
 
 export const Route = createFileRoute("/production/deadline")({
   head: () => ({ meta: [{ title: "Deadline Tracking — BrushPack" }] }),
@@ -25,7 +25,6 @@ const EMPTY = {
   notes:      "",
 };
 
-/* ── status → pill tone ── */
 function statusTone(s) {
   if (s === "Completed") return "success";
   if (s === "Overdue")   return "danger";
@@ -33,77 +32,97 @@ function statusTone(s) {
   return "info";
 }
 
-/* ── priority → pill tone ── */
 function priorityTone(p) {
   if (p === "High")   return "danger";
   if (p === "Medium") return "warn";
   return "muted";
 }
 
-/* ── days until deadline ── */
 function daysUntil(dateStr) {
   if (!dateStr) return null;
-  const diff = Math.round((new Date(dateStr) - new Date()) / 86400000);
-  return diff;
+  return Math.round((new Date(dateStr) - new Date()) / 86400000);
 }
 
 function Page() {
-  const [rows,    setRows]    = useState(() => deadlineStore.getAll());
+  const [rows,    setRows]    = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form,    setForm]    = useState(EMPTY);
   const [editId,  setEditId]  = useState(null);
   const [saving,  setSaving]  = useState(false);
   const [toast,   setToast]   = useState("");
   const [filter,  setFilter]  = useState("All");
 
+  useEffect(() => {
+    deadlineApi.getAll()
+      .then(setRows)
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2800); };
 
-  /* ── KPIs ── */
-  const overdue    = rows.filter((r) => r.status === "Overdue").length;
-  const atRisk     = rows.filter((r) => r.status === "At Risk").length;
-  const onTrack    = rows.filter((r) => r.status === "On Track").length;
-  const completed  = rows.filter((r) => r.status === "Completed").length;
+  const overdue   = rows.filter((r) => r.status === "Overdue").length;
+  const atRisk    = rows.filter((r) => r.status === "At Risk").length;
+  const onTrack   = rows.filter((r) => r.status === "On Track").length;
+  const completed = rows.filter((r) => r.status === "Completed").length;
 
-  /* ── Save / update ── */
-  const saveEntry = () => {
+  const saveEntry = async () => {
     if (!form.orderId.trim())  { alert("Order ID is required.");    return; }
     if (!form.product.trim())  { alert("Product is required.");     return; }
     if (!form.client.trim())   { alert("Client is required.");      return; }
     if (!form.deadline)        { alert("Deadline date is required.");return; }
 
     setSaving(true);
-    if (editId) {
-      const updated = deadlineStore.update(editId, form);
-      setRows(updated);
-      showToast(`✓ Deadline for ${form.orderId} updated.`);
-      setEditId(null);
-    } else {
-      deadlineStore.add(form);
-      setRows(deadlineStore.getAll());
-      showToast(`✓ Deadline for ${form.orderId} saved.`);
+    try {
+      if (editId) {
+        const updated = await deadlineApi.update(editId, form);
+        setRows((prev) => prev.map((r) => (r.id === editId ? updated : r)));
+        showToast(`✓ Deadline for ${form.orderId} updated.`);
+        setEditId(null);
+      } else {
+        const created = await deadlineApi.create(form);
+        setRows((prev) => [created, ...prev]);
+        showToast(`✓ Deadline for ${form.orderId} saved.`);
+      }
+      setForm(EMPTY);
+    } catch (err) {
+      alert("Failed to save: " + err.message);
+    } finally {
+      setSaving(false);
     }
-    setForm(EMPTY);
-    setSaving(false);
   };
 
-  const deleteRow = (id) => {
+  const deleteRow = async (id) => {
     if (!confirm("Delete this deadline entry?")) return;
-    setRows(deadlineStore.remove(id));
-    showToast("Deadline entry deleted.");
+    try {
+      await deadlineApi.delete(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      showToast("Deadline entry deleted.");
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
   };
 
   const startEdit = (row) => {
     setEditId(row.id);
-    setForm({ ...row });
+    setForm({
+      orderId:    row.orderId    ?? "",
+      product:    row.product    ?? "",
+      client:     row.client     ?? "",
+      deadline:   row.deadline   ?? "",
+      priority:   row.priority   ?? "Medium",
+      status:     row.status     ?? "On Track",
+      assignedTo: row.assignedTo ?? "",
+      notes:      row.notes      ?? "",
+    });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const cancelEdit = () => { setEditId(null); setForm(EMPTY); };
 
-  /* ── Filter ── */
   const filterOptions = ["All", "On Track", "At Risk", "Overdue", "Completed"];
   const visible = filter === "All" ? rows : rows.filter((r) => r.status === filter);
 
-  /* ── Select helper ── */
   const selectCls = inputCls + " bg-card";
 
   return (
@@ -118,7 +137,7 @@ function Page() {
         </div>
       )}
 
-      {/* ── KPI row ── */}
+      {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <Stat label="Overdue"   value={String(overdue)}   hint="Need immediate action" />
         <Stat label="At Risk"   value={String(atRisk)}    hint="Monitor closely" />
@@ -126,7 +145,7 @@ function Page() {
         <Stat label="Completed" value={String(completed)} hint="Dispatched" />
       </div>
 
-      {/* ── Add / Edit form ── */}
+      {/* Add / Edit form */}
       <Section
         title={editId ? `Edit Deadline — ${form.orderId}` : "Add Deadline"}
         action={editId ? (
@@ -137,78 +156,37 @@ function Page() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <Field label="Order ID">
-            <input
-              className={inputCls}
-              placeholder="PK-2381"
-              value={form.orderId}
-              onChange={(e) => setForm({ ...form, orderId: e.target.value })}
-            />
+            <input className={inputCls} placeholder="PK-2381" value={form.orderId} onChange={(e) => setForm({ ...form, orderId: e.target.value })} />
           </Field>
           <Field label="Product / Pack Type">
-            <input
-              className={inputCls}
-              placeholder="Round Tip 12mm — Cardboard"
-              value={form.product}
-              onChange={(e) => setForm({ ...form, product: e.target.value })}
-            />
+            <input className={inputCls} placeholder="Round Tip 12mm — Cardboard" value={form.product} onChange={(e) => setForm({ ...form, product: e.target.value })} />
           </Field>
           <Field label="Client">
-            <input
-              className={inputCls}
-              placeholder="BrightBrush Co."
-              value={form.client}
-              onChange={(e) => setForm({ ...form, client: e.target.value })}
-            />
+            <input className={inputCls} placeholder="BrightBrush Co." value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
           </Field>
           <Field label="Deadline Date">
-            <input
-              type="date"
-              className={inputCls}
-              value={form.deadline}
-              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-            />
+            <input type="date" className={inputCls} value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
           </Field>
           <Field label="Priority">
-            <select
-              className={selectCls}
-              value={form.priority}
-              onChange={(e) => setForm({ ...form, priority: e.target.value })}
-            >
+            <select className={selectCls} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
               {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
             </select>
           </Field>
           <Field label="Status">
-            <select
-              className={selectCls}
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
+            <select className={selectCls} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               {STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
           </Field>
           <Field label="Assigned To">
-            <input
-              className={inputCls}
-              placeholder="Contractor / supervisor name"
-              value={form.assignedTo}
-              onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
-            />
+            <input className={inputCls} placeholder="Contractor / supervisor name" value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} />
           </Field>
           <Field label="Notes">
-            <input
-              className={inputCls}
-              placeholder="Optional notes"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
+            <input className={inputCls} placeholder="Optional notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
         </div>
-
         <div className="mt-4 sm:mt-5 flex flex-wrap gap-2 justify-end">
           {!editId && (
-            <Btn variant="ghost" onClick={() => setForm(EMPTY)}>
-              Reset
-            </Btn>
+            <Btn variant="ghost" onClick={() => setForm(EMPTY)}>Reset</Btn>
           )}
           <Btn onClick={saveEntry} disabled={saving}>
             <CalendarClock className="h-4 w-4" />
@@ -219,7 +197,7 @@ function Page() {
 
       <div className="h-5 sm:h-6" />
 
-      {/* ── Table ── */}
+      {/* Table */}
       <Section
         title="All Deadlines"
         action={
@@ -257,7 +235,12 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {visible.map((r) => {
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">Loading…</td>
+                </tr>
+              )}
+              {!loading && visible.map((r) => {
                 const days = daysUntil(r.deadline);
                 const daysLabel =
                   days === null ? "—"
@@ -269,46 +252,24 @@ function Page() {
                   : days < 0   ? "#e53e3e"
                   : days <= 2  ? "#000000"
                   :              "#38a169";
-
                 return (
-                  <tr
-                    key={r.id}
-                    className="border-b border-border/60 last:border-0 hover:bg-secondary/30 transition"
-                  >
+                  <tr key={r.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/30 transition">
                     <td className="px-4 sm:px-6 py-3 font-medium whitespace-nowrap">{r.orderId}</td>
                     <td className="px-4 sm:px-6 py-3">
                       <div className="font-medium truncate max-w-[180px]">{r.product}</div>
                       <div className="text-xs text-muted-foreground">{r.client}</div>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-muted-foreground">
-                      {r.deadline || "—"}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap font-semibold" style={{ color: daysColor }}>
-                      {daysLabel}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3">
-                      <Pill tone={priorityTone(r.priority)}>{r.priority}</Pill>
-                    </td>
-                    <td className="px-4 sm:px-6 py-3">
-                      <Pill tone={statusTone(r.status)}>{r.status}</Pill>
-                    </td>
-                    <td className="px-4 sm:px-6 py-3 text-muted-foreground whitespace-nowrap">
-                      {r.assignedTo || "—"}
-                    </td>
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-muted-foreground">{r.deadline || "—"}</td>
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap font-semibold" style={{ color: daysColor }}>{daysLabel}</td>
+                    <td className="px-4 sm:px-6 py-3"><Pill tone={priorityTone(r.priority)}>{r.priority}</Pill></td>
+                    <td className="px-4 sm:px-6 py-3"><Pill tone={statusTone(r.status)}>{r.status}</Pill></td>
+                    <td className="px-4 sm:px-6 py-3 text-muted-foreground whitespace-nowrap">{r.assignedTo || "—"}</td>
                     <td className="px-4 sm:px-6 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => startEdit(r)}
-                          className="text-muted-foreground hover:text-primary transition p-1"
-                          title="Edit deadline"
-                        >
+                        <button onClick={() => startEdit(r)} className="text-muted-foreground hover:text-primary transition p-1" title="Edit deadline">
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => deleteRow(r.id)}
-                          className="text-muted-foreground hover:text-destructive transition p-1"
-                          title="Delete deadline"
-                        >
+                        <button onClick={() => deleteRow(r.id)} className="text-muted-foreground hover:text-destructive transition p-1" title="Delete deadline">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -316,7 +277,7 @@ function Page() {
                   </tr>
                 );
               })}
-              {visible.length === 0 && (
+              {!loading && visible.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-10 text-center text-muted-foreground text-sm">
                     No deadlines found. {filter !== "All" && `Try removing the "${filter}" filter.`}
@@ -330,4 +291,3 @@ function Page() {
     </DashboardLayout>
   );
 }
-

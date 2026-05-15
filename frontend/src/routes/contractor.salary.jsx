@@ -1,9 +1,10 @@
-// contractor.salary.jsx — fully static, localStorage-backed
+// contractor.salary.jsx — backend API backed (SQLite persistent storage)
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat, Pill, Btn, inputCls } from "@/components/PageHelpers";
-import { contractorStore, exportCSV } from "@/lib/store";
+import { contractorApi } from "@/lib/api";
+import { exportCSV } from "@/lib/store";
 import { Download, Plus, Search, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/contractor/salary")({
@@ -12,16 +13,34 @@ export const Route = createFileRoute("/contractor/salary")({
 });
 
 function Page() {
-  const [rows, setRows]     = useState(() => contractorStore.getAll());
+  const [rows, setRows]     = useState([]);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const markPaid = (id) => {
-    setRows(contractorStore.markPaid(id));
+  useEffect(() => {
+    contractorApi.getAll()
+      .then(setRows)
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const markPaid = async (id) => {
+    try {
+      const updated = await contractorApi.markPaid(id);
+      setRows((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    } catch (err) {
+      alert("Failed to update status: " + err.message);
+    }
   };
 
-  const removeRow = (id) => {
+  const removeRow = async (id) => {
     if (!confirm("Remove this contractor?")) return;
-    setRows(contractorStore.remove(id));
+    try {
+      await contractorApi.delete(id);
+      setRows((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
   };
 
   const handleExport = () => {
@@ -93,7 +112,14 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => (
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">
+                    Loading…
+                  </td>
+                </tr>
+              )}
+              {!loading && filtered.map((r) => (
                 <tr key={r.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/30 transition">
                   <td className="px-4 sm:px-6 py-3">
                     <div className="flex items-center gap-2 sm:gap-3">
@@ -129,7 +155,7 @@ function Page() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">
                     No contractors found.

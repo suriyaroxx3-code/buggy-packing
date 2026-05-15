@@ -1,9 +1,9 @@
-// inventory.stock.jsx — Stock Management, fully static localStorage-backed
+// inventory.stock.jsx — Stock Management, backend API backed (SQLite persistent)
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Stat, Field, inputCls, Btn, Pill } from "@/components/PageHelpers";
-import { stockStore } from "@/lib/store";
+import { stockApi } from "@/lib/api";
 import blisterCard from "@/assets/blister-card.webp";
 import cardboardBoxes from "@/assets/cardboard boxes.avif";
 import cardboardSheets from "@/assets/cardboard sheets-A4.avif";
@@ -38,7 +38,8 @@ const itemImage = (name) => {
 };
 
 function Page() {
-  const [items, setItems]         = useState(() => stockStore.getAll());
+  const [items, setItems]         = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState("");
   const [cat, setCat]             = useState("All");
   const [editingId, setEditingId] = useState(null);
@@ -46,6 +47,13 @@ function Page() {
   const [addForm, setAddForm]     = useState(EMPTY_FORM);
   const [showAdd, setShowAdd]     = useState(false);
   const [toast, setToast]         = useState("");
+
+  useEffect(() => {
+    stockApi.getAll()
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
 
@@ -59,36 +67,50 @@ function Page() {
   const totalVal = items.reduce((s, i) => s + i.qty, 0);
 
   /* Save quantity edit */
-  const saveEdit = (id) => {
+  const saveEdit = async (item) => {
     const qty = parseFloat(editQty);
     if (isNaN(qty) || qty < 0) { setEditingId(null); return; }
-    setItems(stockStore.updateQty(id, qty));
-    setEditingId(null);
-    showToast("✓ Quantity updated.");
+    try {
+      const updated = await stockApi.update(item.id, { ...item, qty });
+      setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      setEditingId(null);
+      showToast("✓ Quantity updated.");
+    } catch (err) {
+      alert("Failed to update: " + err.message);
+    }
   };
 
   /* Delete item */
-  const deleteItem = (id) => {
+  const deleteItem = async (id) => {
     if (!confirm("Remove this item from inventory?")) return;
-    setItems(stockStore.remove(id));
-    showToast("Item removed.");
+    try {
+      await stockApi.delete(id);
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      showToast("Item removed.");
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
   };
 
   /* Add new item */
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!addForm.name.trim()) { alert("Item name is required."); return; }
     if (!addForm.qty)         { alert("Quantity is required."); return; }
-    const entry = stockStore.add({
-      name: addForm.name.trim(),
-      cat:  addForm.cat,
-      qty:  parseFloat(addForm.qty),
-      unit: addForm.unit.trim() || "pcs",
-      min:  parseFloat(addForm.min) || 0,
-    });
-    setItems(stockStore.getAll());
-    setAddForm(EMPTY_FORM);
-    setShowAdd(false);
-    showToast("✓ Item added to inventory.");
+    try {
+      const created = await stockApi.create({
+        name: addForm.name.trim(),
+        cat:  addForm.cat,
+        qty:  parseFloat(addForm.qty),
+        unit: addForm.unit.trim() || "pcs",
+        min:  parseFloat(addForm.min) || 0,
+      });
+      setItems((prev) => [...prev, created]);
+      setAddForm(EMPTY_FORM);
+      setShowAdd(false);
+      showToast("✓ Item added to inventory.");
+    } catch (err) {
+      alert("Failed to add item: " + err.message);
+    }
   };
 
   const stockStatus = (item) => {
@@ -200,7 +222,12 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => (
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">Loading…</td>
+                </tr>
+              )}
+              {!loading && filtered.map((item) => (
                 <tr key={item.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/30 transition">
                   <td className="px-4 sm:px-6 py-3 font-medium">
                     <div className="flex items-center gap-3">
@@ -227,9 +254,9 @@ function Page() {
                           value={editQty}
                           onChange={(e) => setEditQty(e.target.value)}
                           autoFocus
-                          onKeyDown={(e) => { if (e.key === "Enter") saveEdit(item.id); if (e.key === "Escape") setEditingId(null); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") saveEdit(item); if (e.key === "Escape") setEditingId(null); }}
                         />
-                        <button onClick={() => saveEdit(item.id)} className="text-primary hover:text-primary/80 p-1" title="Save">
+                        <button onClick={() => saveEdit(item)} className="text-primary hover:text-primary/80 p-1" title="Save">
                           <Check className="h-4 w-4" />
                         </button>
                         <button onClick={() => setEditingId(null)} className="text-muted-foreground p-1" title="Cancel">
@@ -266,7 +293,7 @@ function Page() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">No items found.</td>
                 </tr>

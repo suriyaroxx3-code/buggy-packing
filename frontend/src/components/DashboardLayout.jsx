@@ -8,7 +8,7 @@ import {
   ChevronDown, Package, Settings, AlertCircle, CalendarClock,
   User, KeyRound, ChevronRight, Check, ShieldCheck,
 } from "lucide-react";
-import { userStore, sessionStore } from "@/lib/store";
+import { authApi, sessionStore } from "@/lib/api";
 
 
 const groups = [
@@ -530,14 +530,17 @@ export function DashboardLayout({ children, title, subtitle, lowStockItems = [] 
                               if (!pwForm.next)    { setPwError("Enter a new password."); return; }
                               if (pwForm.next.length < 6) { setPwError("New password must be 6+ characters."); return; }
                               if (pwForm.next !== pwForm.confirm) { setPwError("New passwords do not match."); return; }
-                              try {
-                                userStore.changePassword(sessionUser, pwForm.current, pwForm.next);
-                                setPwOk("Password changed successfully!");
-                                setPwForm({ current: "", next: "", confirm: "" });
-                                setTimeout(() => { setPwMode(false); setPwOk(""); }, 1800);
-                              } catch {
-                                setPwError("Current password is incorrect.");
-                              }
+                              authApi.changePassword(sessionUser, pwForm.current, pwForm.next)
+                                .then((res) => {
+                                  if (res?.ok === false) {
+                                    setPwError(res.message || "Current password is incorrect.");
+                                  } else {
+                                    setPwOk("Password changed successfully!");
+                                    setPwForm({ current: "", next: "", confirm: "" });
+                                    setTimeout(() => { setPwMode(false); setPwOk(""); }, 1800);
+                                  }
+                                })
+                                .catch(() => setPwError("Failed to change password. Is the backend running?"));
                             }}
                             className="flex-1 rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
                             style={{ backgroundColor: "#000000", color: "#ffffff", border: "none", cursor: "pointer" }}

@@ -1,9 +1,9 @@
-// billing.quotation.jsx — Quotations & Orders, fully static localStorage-backed
+// billing.quotation.jsx — Quotations & Orders, backend API backed (SQLite persistent)
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Pill, Btn, Stat, Field, inputCls } from "@/components/PageHelpers";
-import { billingStore } from "@/lib/store";
+import { billingApi } from "@/lib/api";
 import { Plus, X, Check, Pencil, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/billing/quotation")({
@@ -17,67 +17,86 @@ const tone     = (s) => ({ Accepted: "success", Received: "success", Sent: "info
 const EMPTY = { id: "", contractor: "", date: new Date().toISOString().split("T")[0], value: "", status: "Draft" };
 
 function Page() {
-  const [records, setRecords]   = useState(() => billingStore.getAll());
+  const [records, setRecords]     = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const [viewMode, setViewMode]   = useState("quotation");
-  const [isAdding, setIsAdding] = useState(false);
+  const [isAdding, setIsAdding]   = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [newEntry, setNewEntry] = useState(EMPTY);
+  const [newEntry, setNewEntry]   = useState(EMPTY);
   const [editEntry, setEditEntry] = useState(EMPTY);
-  const [toast, setToast]       = useState("");
+  const [toast, setToast]         = useState("");
+
+  useEffect(() => {
+    billingApi.getAll()
+      .then(setRecords)
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
 
-  /* Add new quotation */
-  const handleAdd = () => {
+  /* Add new record */
+  const handleAdd = async () => {
     if (!newEntry.id.trim())         { alert("Order ID is required."); return; }
     if (!newEntry.contractor.trim()) { alert("Contractor name is required."); return; }
-
-    // Check for duplicate ID
     if (records.some((r) => r.id === newEntry.id.trim())) {
       alert(`Order ID "${newEntry.id.trim()}" already exists. Use a different ID.`);
       return;
     }
-
-    const record = {
-      ...newEntry,
-      id: newEntry.id.trim(),
-      contractor: newEntry.contractor.trim(),
-      value: Number(newEntry.value) || 0,
-      type: viewMode === "billing" ? "bill" : "quote",
-    };
-    const updated = billingStore.add(record);
-    setRecords(Array.isArray(updated) ? updated : billingStore.getAll());
-    setIsAdding(false);
-    setNewEntry(EMPTY);
-    showToast(`✓ ${viewMode === "billing" ? "Billing" : "Quotation"} added.`);
+    try {
+      const record = {
+        id:         newEntry.id.trim(),
+        contractor: newEntry.contractor.trim(),
+        date:       newEntry.date,
+        value:      Number(newEntry.value) || 0,
+        status:     newEntry.status,
+        type:       viewMode === "billing" ? "bill" : "quote",
+      };
+      const created = await billingApi.create(record);
+      setRecords((prev) => [created, ...prev]);
+      setIsAdding(false);
+      setNewEntry(EMPTY);
+      showToast(`✓ ${viewMode === "billing" ? "Billing" : "Quotation"} added.`);
+    } catch (err) {
+      alert("Failed to add: " + err.message);
+    }
   };
 
   /* Save edit */
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editEntry.id.trim() || !editEntry.contractor.trim()) { alert("ID and contractor are required."); return; }
-    const updated = billingStore.update(editingId, { ...editEntry, value: Number(editEntry.value) || 0 });
-    setRecords(updated);
-    setEditingId(null);
-    setEditEntry(EMPTY);
-    showToast("✓ Record updated.");
+    try {
+      const updated = await billingApi.update(editingId, {
+        ...editEntry,
+        value: Number(editEntry.value) || 0,
+      });
+      setRecords((prev) => prev.map((r) => (r.id === editingId ? updated : r)));
+      setEditingId(null);
+      setEditEntry(EMPTY);
+      showToast("✓ Record updated.");
+    } catch (err) {
+      alert("Failed to update: " + err.message);
+    }
   };
 
   /* Delete */
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!confirm("Delete this record? This cannot be undone.")) return;
-    setRecords(billingStore.remove(id));
-    showToast("Record deleted.");
+    try {
+      await billingApi.delete(id);
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+      showToast("Record deleted.");
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
   };
 
-  /* Cancel add/edit */
   const cancelAdd  = () => { setIsAdding(false); setNewEntry(EMPTY); };
   const cancelEdit = () => { setEditingId(null); setEditEntry(EMPTY); };
 
   const filteredRecords = records.filter((r) =>
-    viewMode === "billing"
-      ? r.type === "bill"
-      : r.type !== "bill"
+    viewMode === "billing" ? r.type === "bill" : r.type !== "bill"
   );
 
   const stats = [
@@ -164,9 +183,14 @@ function Page() {
               </tr>
             </thead>
             <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">Loading…</td>
+                </tr>
+              )}
 
               {/* Add new row */}
-              {isAdding && (
+              {!loading && isAdding && (
                 <tr className="bg-secondary/20 border-b border-border">
                   <td className="px-4 sm:px-6 py-2">
                     <input className={inputCls} placeholder="Q-0106" value={newEntry.id} onChange={(e) => setNewEntry({ ...newEntry, id: e.target.value })} />
@@ -195,7 +219,7 @@ function Page() {
               )}
 
               {/* Data rows */}
-              {displayed.map((r) =>
+              {!loading && displayed.map((r) =>
                 editingId === r.id ? (
                   <tr key={r.id} className="bg-secondary/20 border-b border-border">
                     <td className="px-4 sm:px-6 py-2">
@@ -238,14 +262,12 @@ function Page() {
                         <button
                           onClick={() => { setEditingId(r.id); setEditEntry({ ...r }); cancelAdd(); }}
                           className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition"
-                          title="Edit"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(r.id)}
                           className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition"
-                          title="Delete"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -255,7 +277,7 @@ function Page() {
                 )
               )}
 
-              {displayed.length === 0 && !isAdding && (
+              {!loading && displayed.length === 0 && !isAdding && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">
                     {`No records yet. Click "New ${viewMode === "billing" ? "Billing" : "Quotation"}" to add one.`}

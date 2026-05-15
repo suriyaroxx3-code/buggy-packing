@@ -1,9 +1,9 @@
-// production.status.jsx — Order Status, driven by real dispatch tracking data
+// production.status.jsx — Order Status, driven by real dispatch tracking data (backend API)
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Section, Pill } from "@/components/PageHelpers";
-import { batchStore } from "@/lib/store";
+import { batchApi } from "@/lib/api";
 
 export const Route = createFileRoute("/production/status")({
   head: () => ({ meta: [{ title: "Order Status — BrushPack" }] }),
@@ -12,12 +12,11 @@ export const Route = createFileRoute("/production/status")({
 
 const STAGES = ["Receiving", "Sorting", "Packing", "Sealing", "QC", "Dispatch"];
 
-/** Map a dispatch status string to a pipeline stage index (0–5) */
 function stageFromDispatch(ds) {
   if (ds === "Dispatched")  return 5;
   if (ds === "In Transit")  return 4;
   if (ds === "Cancelled")   return 0;
-  return 2; // Pending — show at Packing stage
+  return 2;
 }
 
 function stagePillTone(stageIdx) {
@@ -27,9 +26,16 @@ function stagePillTone(stageIdx) {
 }
 
 function Page() {
-  const [orders] = useState(() => batchStore.getAll());
+  const [orders, setOrders]   = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Count per stage for Floor Summary
+  useEffect(() => {
+    batchApi.getAll()
+      .then(setOrders)
+      .catch(() => setOrders([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   const stageCounts = STAGES.map((_, i) =>
     orders.filter((o) => stageFromDispatch(o.dispatchStatus || "Pending") === i).length
   );
@@ -39,7 +45,9 @@ function Page() {
       title="Order Status"
       subtitle="Live pipeline progress of every packing order — reflects Dispatch Tracking data."
     >
-      {orders.length === 0 ? (
+      {loading ? (
+        <div className="px-6 py-8 text-center text-muted-foreground text-sm">Loading…</div>
+      ) : orders.length === 0 ? (
         <div className="rounded-2xl bg-card border border-border p-10 text-center text-muted-foreground text-sm">
           No orders yet. Add batch entries in{" "}
           <a href="/production/weight" className="text-primary underline underline-offset-2">
@@ -58,38 +66,67 @@ function Page() {
                 className="animate-fade-in rounded-2xl bg-card border border-border p-4 sm:p-5 shadow-soft hover-lift"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-xs text-muted-foreground">{o.batch}</div>
-                    <div className="font-display text-base sm:text-lg mt-0.5 truncate">{o.product}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {(o.input || 0).toLocaleString()} received · {(o.output || 0).toLocaleString()} packed
-                    </div>
+                  <div>
+                    <div className="font-display text-base font-semibold">{o.batch}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">{o.product}</div>
                   </div>
                   <Pill tone={stagePillTone(stage)}>{STAGES[stage]}</Pill>
                 </div>
 
-                {/* Progress bar */}
-                <div className="mt-4 sm:mt-5">
-                  <div className="flex items-center gap-1">
-                    {STAGES.map((_, idx) => (
+                {/* Pipeline progress */}
+                <div className="mt-4">
+                  <div className="flex gap-1">
+                    {STAGES.map((s, si) => (
                       <div
-                        key={idx}
-                        className={`h-1.5 flex-1 rounded-full transition-all ${
-                          idx <= stage ? "bg-primary" : "bg-secondary"
+                        key={s}
+                        className={`flex-1 h-1.5 rounded-full transition ${
+                          si <= stage ? "bg-primary" : "bg-secondary"
                         }`}
                       />
                     ))}
                   </div>
-                  <div className="mt-2 flex justify-between text-[10px] sm:text-[11px] text-muted-foreground overflow-hidden">
-                    {STAGES.map((s) => (
-                      <span key={s} className="truncate">{s}</span>
-                    ))}
+                  <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+                    <span>{STAGES[0]}</span>
+                    <span>{STAGES[STAGES.length - 1]}</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Received: </span>
+                    <span className="font-medium">{(o.input || 0).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Packed: </span>
+                    <span className="font-medium">{(o.output || 0).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Date: </span>
+                    <span className="font-medium">{o.date || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Status: </span>
+                    <span className="font-medium">{o.dispatchStatus || "Pending"}</span>
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* Floor summary */}
+      {!loading && orders.length > 0 && (
+        <Section title="Floor Summary" className="mt-6">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {STAGES.map((s, i) => (
+              <div key={s} className="rounded-xl bg-secondary/40 border border-border p-3 text-center">
+                <div className="font-display text-xl">{stageCounts[i]}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{s}</div>
+              </div>
+            ))}
+          </div>
+        </Section>
       )}
     </DashboardLayout>
   );
