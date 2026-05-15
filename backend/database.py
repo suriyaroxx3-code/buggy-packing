@@ -26,8 +26,45 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _backup_corrupt_db() -> None:
+    """Rename a malformed DB file so a fresh database can be created."""
+    if not DB_PATH.exists():
+        return
+
+    backup = DB_PATH.with_name(f"{DB_PATH.stem}.corrupt{DB_PATH.suffix}")
+    count = 1
+    while backup.exists():
+        backup = DB_PATH.with_name(f"{DB_PATH.stem}.corrupt{count}{DB_PATH.suffix}")
+        count += 1
+
+    DB_PATH.replace(backup)
+    print(
+        f"WARNING: Malformed SQLite file detected. "
+        f"Renamed {DB_PATH.name} to {backup.name} and creating a new database."
+    )
+
+
 def init_db() -> None:
     """Create all tables if they don't exist, and seed the default user."""
+    if DB_PATH.exists():
+        conn = None
+        try:
+            conn = sqlite3.connect(str(DB_PATH))
+            conn.execute("PRAGMA foreign_keys=ON")
+            result = conn.execute("PRAGMA integrity_check").fetchone()
+            if result is None or result[0] != "ok":
+                conn.close()
+                conn = None
+                _backup_corrupt_db()
+        except sqlite3.DatabaseError:
+            if conn is not None:
+                conn.close()
+                conn = None
+            _backup_corrupt_db()
+        finally:
+            if conn is not None:
+                conn.close()
+
     with _connect() as conn:
         conn.executescript("""
         -- ── Users ────────────────────────────────────────────────────────────

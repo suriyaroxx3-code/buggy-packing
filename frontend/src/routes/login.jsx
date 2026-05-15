@@ -254,9 +254,7 @@ function LoginPage() {
                     {siShowP ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs mt-1.5" style={{ color: "#000000" }}>
-                  Default: username <strong>manager</strong> / password <strong>brushpack2024</strong>
-                </p>
+        
               </div>
 
               <button type="submit" disabled={siLoading} className="w-full rounded-xl py-2.5 sm:py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-all" style={{ backgroundColor: "#000000", color: "#ffffff", cursor: siLoading ? "not-allowed" : "pointer", boxShadow: siLoading ? "none" : "0 4px 16px rgba(0,0,0,0.35)" }}>
